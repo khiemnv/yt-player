@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import {
@@ -26,72 +26,29 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import ReactPlayer from 'react-player'
+import { PlaylistItem } from "./PlaylistItem";
 const ItemType = "playlistItem";
 
-function PlaylistItem({ video, index, moveItem, onEdit, onDelete, onPlay, onStop }) {
-  const ref = useRef(null);
 
-  const [, drop] = useDrop({
-    accept: ItemType,
-    hover(item) {
-      if (item.index === index) return;
-      moveItem(item.index, index);
-      item.index = index;
-    },
-  });
-
-  const [{ isDragging }, drag] = useDrag({
-    type: ItemType,
-    item: { index },
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  });
-
-  drag(drop(ref));
-
-  return (
-    <ListItem
-      ref={ref}
-      component={Paper}
-      sx={{
-        opacity: isDragging ? 0.5 : 1,
-        mb: 1,
-        display: "flex",
-        alignItems: "center",
-        gap: 2,
-        background: "#f5f5f5",
-      }}
-    >
-      <DragIndicatorIcon sx={{ cursor: "grab" }} />
-      <ListItemText
-        primary={video.videourl}
-        secondary={`Start: ${video.startTime || 0}s, End: ${video.endTime || 0}s, Repeat: ${video.repeate ? "Yes" : "No"}`}
-      />
-      <Button variant="contained" color="success" size="small" onClick={() => onPlay(index)}>
-        Play
-      </Button>
-      <Button variant="contained" color="success" size="small" onClick={() => onStop(index)}>
-        Stop
-      </Button>
-      <IconButton aria-label="edit" onClick={() => onEdit(index)}>
-        <EditIcon />
-      </IconButton>
-      <IconButton aria-label="delete" onClick={() => onDelete(index)}>
-        <DeleteIcon />
-      </IconButton>
-    </ListItem>
-  );
+// Hàm trộn mảng sử dụng thuật toán Fisher-Yates
+function shuffleArray(array) {
+  const arr = [...array]; // sao chép mảng để không làm thay đổi mảng gốc
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1)); // số ngẫu nhiên từ 0 tới i
+    [arr[i], arr[j]] = [arr[j], arr[i]]; // hoán đổi vị trí
+  }
+  return arr;
 }
-
 function PlaylistManager() {
   const [playlist, setPlaylist] = useState([]);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState({ videourl: "", startTime: "", endTime: "", repeate: false });
   const [editingIdx, setEditingIdx] = useState(null);
-  const [playingIdx, setPlayingIdx] = useState(null);
+  const [playingVideo, setPlayingVideo] = useState(null);
   const [repeatAll, setRepeatAll] = useState(false);
-  
+  const [queue, setQueue] = useState([]);
+  const [queueIdx, setQueueIdx] = useState(false);
+
   const playerRef = useRef(null);
 
   const handleEdit = (idx) => {
@@ -113,61 +70,79 @@ function PlaylistManager() {
     setPlaylist(updated);
   };
 
-  const startPlayAll = () => { }
+  // Hàm play all với hoặc không shuffle
+  const startPlayAll = (shuffle) => {
+    if (shuffle) {
+      const newList = shuffleArray(playlist); // gọi hàm trộn
+      setQueue(newList);
+    } else {
+      setQueue([...playlist]);
+    }
+    setQueueIdx(0);
+  };
 
   // Để xử lý start/end, bạn cần truyền start/end vào và sử dụng onProgress
   const [playedSeconds, setPlayedSeconds] = React.useState(0);
-  const [playing,setPlaying] = useState(true);
-  
-  const onPause = () => console.log("Video paused")
-  const onStop = () => console.log("Video ended")
-  const onPlay = () => {
+  const [playing, setPlaying] = useState(true);
+
+  const onPause = useCallback(() => console.log("Video paused"), [])
+  const onStop = useCallback(() => console.log("Video ended"), [])
+  const onPlay = useCallback(() => {
     console.log("Video started");
     console.log(playerRef.current)
-    const start = playlist[playingIdx].startTime
+    const start = playingVideo.startTime
     if (start) {
       if (playerRef.current.currentTime < start) {
         playerRef.current.currentTime = start;
       }
     }
-  }
-  const onReady = () => () => {
-    console.log("Video ready: current", playerRef.current)
-    const start = playlist[playingIdx].startTime
+  }, [playingVideo])
+  const onReady = useCallback(() => () => {
+    console.log("Video ready");
+  }, [])
+
+  const handlePlayOneProgress = useCallback((progress) => {
+    console.log(playerRef.current.currentTime)
+    setPlayedSeconds(playerRef.current.currentTime);
+    // Khi đạt đến end (nếu có), dừng video
+    if (playingVideo.endTime && playerRef.current.currentTime >= playingVideo.endTime) {
+      setPlayingVideo(null)
+    }
+  }, [ playingVideo]);
+
+  const handleStop = useCallback(() => {
+    setPlayingVideo(null)
+  }, [])
+
+  const onPlayAll = useCallback(() => {
+    console.log("Video started");
+    console.log(playerRef.current)
+    const start = queue[queueIdx].startTime
     if (start) {
       if (playerRef.current.currentTime < start) {
         playerRef.current.currentTime = start;
       }
     }
-  }
-function secondsToHHMMSS(seconds) {
-  seconds = Math.floor(seconds);
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  return [
-    h > 0 ? String(h).padStart(2, "0") : "00",
-    String(m).padStart(2, "0"),
-    String(s).padStart(2, "0"),
-  ].join(":");
-}
-  const handleProgress = (progress) => {
+  }, [queue, queueIdx])
+
+  const handlePlayAllProgress = useCallback((progress) => {
     // console.log(progress)
     console.log(playerRef.current.currentTime)
     setPlayedSeconds(playerRef.current.currentTime);
     // Khi đạt đến end (nếu có), dừng video
-    if (playingIdx !== null) {
-      const end = playlist[playingIdx].endTime;
+    if (queueIdx !== null) {
+      const end = queue[queueIdx].endTime;
       if (end && playerRef.current.currentTime >= end) {
-        // onStop && onStop();
-        handleStop();
+        if (queueIdx >= queue.length) {
+          setQueueIdx(null)
+        } else {
+          // play next video
+          setQueueIdx(queueIdx + 1);
+        }
       }
     }
-  };
+  },[queue, queueIdx]);
 
-  const handleStop = () => {
-    setPlayingIdx(null)
-  }
   return (
     <DndProvider backend={HTML5Backend}>
       <Container maxWidth="sm" sx={{ py: 4 }}>
@@ -175,72 +150,37 @@ function secondsToHHMMSS(seconds) {
           Playlist Manager
         </Typography>
         {/* playall, shuffle, repeat all */}
-        <Stack direction="row" spacing={2} alignItems="center" mb={2}>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => startPlayAll(false)}
-            startIcon={<PlaylistPlayIcon />}
-            disabled={playlist.length === 0}
-          >
-            Play All
-          </Button>
-          <Button
-            variant="contained"
-            color="secondary"
-            onClick={() => startPlayAll(true)}
-            startIcon={<ShuffleIcon />}
-            disabled={playlist.length === 0}
-          >
-            Shuffle
-          </Button>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={repeatAll}
-                onChange={e => setRepeatAll(e.target.checked)}
-              />
-            }
-            label="Lặp lại toàn bộ playlist"
-          />
-        </Stack>
+        {PlayMode(startPlayAll, playlist, repeatAll, setRepeatAll)}
         {/* form thêm video */}
         <AddVideoForm setPlaylist={setPlaylist} />
         <List>
           {playlist.map((video, idx) => (
             <PlaylistItem
-              key={idx}
+              key={video.id ?? video.videourl} // ✅ stable key
               video={video}
               index={idx}
               moveItem={moveItem}
               onEdit={handleEdit}
               onDelete={handleDelete}
-              onPlay={setPlayingIdx}
+              onPlay={()=>setPlayingVideo(video)}
               onStop={handleStop}
+              isPlaying={playingVideo !== null && playingVideo.id === video.id}
             />
           ))}
         </List>
 
-        {playingIdx !== null && playlist[playingIdx] && (
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="h6">Now Playing</Typography>
-            <ReactPlayer 
-            ref={playerRef}
-            src={playlist[playingIdx].videourl}
-              playing={playing}
-              start={playlist[playingIdx].startTime}
-              end={playlist[playingIdx].endTime}
-              controls
-              onPause={onPause}
-              onPlay={onPlay}
-              onEnded={onStop}
-              onProgress={handleProgress}
-              // Bắt đầu từ start
-              progressInterval={500} // kiểm tra mỗi 500ms
-              // Để tự động seek đến start, có thể dùng hàm onReady
-              onReady={onReady}
-              style={{ width: '100%', height: 'auto', aspectRatio: '16/9' }} />
-          </Box>
+        {playingVideo !== null && (
+          <PlayVideoBox
+            playerRef={playerRef}
+            video={playingVideo}
+            onPause={onPause}
+            onPlay={onPlay}
+            onStop={onStop}
+            handleProgress={handlePlayOneProgress}
+            onReady={onReady} />
+        )}
+        {queueIdx !== null && queue[queueIdx] && (
+          PlayVideoBox(playerRef, queue[queueIdx], onPause, onPlayAll, onStop, handlePlayAllProgress, onReady)
         )}
       </Container>
 
@@ -252,6 +192,58 @@ function secondsToHHMMSS(seconds) {
 
 
 export default PlaylistManager;
+
+const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPause, onPlay, onStop, handleProgress, onReady }) {
+  console.log("PlayVideoBox: ", video.id)
+  return <Box sx={{ mt: 2 }}>
+    <Typography variant="h6">Now Playing</Typography>
+    <ReactPlayer
+      ref={playerRef}
+      src={video.videourl}
+      playing={true}
+      start={video.startTime}
+      end={video.endTime}
+      controls
+      onPause={onPause}
+      onPlay={onPlay}
+      onEnded={onStop}
+      onProgress={handleProgress}
+      // Bắt đầu từ start
+      progressInterval={500} // kiểm tra mỗi 500ms
+
+      // Để tự động seek đến start, có thể dùng hàm onReady
+      onReady={onReady}
+      style={{ width: '100%', height: 'auto', aspectRatio: '16/9' }} />
+  </Box>;
+})
+
+function PlayMode(startPlayAll, playlist, repeatAll, setRepeatAll) {
+  return <Stack direction="row" spacing={2} alignItems="center" mb={2}>
+    <Button
+      variant="contained"
+      color="primary"
+      onClick={() => startPlayAll(false)}
+      startIcon={<PlaylistPlayIcon />}
+      disabled={playlist.length === 0}
+    >
+      Play All
+    </Button>
+    <Button
+      variant="contained"
+      color="secondary"
+      onClick={() => startPlayAll(true)}
+      startIcon={<ShuffleIcon />}
+      disabled={playlist.length === 0}
+    >
+      Shuffle
+    </Button>
+    <FormControlLabel
+      control={<Checkbox
+        checked={repeatAll}
+        onChange={e => setRepeatAll(e.target.checked)} />}
+      label="Lặp lại toàn bộ playlist" />
+  </Stack>;
+}
 
 function AddVideoForm({ setPlaylist }) {
   const [editForm, setEditForm] = useState({
@@ -272,7 +264,7 @@ function AddVideoForm({ setPlaylist }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!editForm.videourl) return;
-    setPlaylist((pl) => [...pl, { ...editForm }]);
+    setPlaylist((pl) => [...pl, { id: crypto.randomUUID(), ...editForm }]);
     setEditForm({
       videourl: "",
       startTime: "",
