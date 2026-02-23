@@ -1,40 +1,35 @@
-import React, { useState, useRef, useCallback } from "react";
-import { DndProvider, useDrag, useDrop } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
+import { useRef } from "react";
+import { useDrag, useDrop } from "react-dnd";
 import {
-  Box,
-  Button,
-  Checkbox,
-  Container,
   IconButton,
-  List,
   ListItem,
   ListItemText,
   Paper,
-  Stack,
-  TextField,
-  Typography,
-  FormControlLabel,
+  Chip,
+  Box,
 } from "@mui/material";
+
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import ShuffleIcon from "@mui/icons-material/Shuffle";
-import PlaylistPlayIcon from "@mui/icons-material/PlaylistPlay";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
-import ReactPlayer from 'react-player'
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import StopIcon from "@mui/icons-material/Stop";
+
 const ItemType = "playlistItem";
 
-
-export function PlaylistItem({ 
-  video, index, moveItem, onEdit, onDelete, onPlay, 
-  onStop, isPlaying }) {
+export function PlaylistItem({
+  video,
+  index,
+  moveItem,
+  onEdit,
+  onDelete,
+  onPlay,
+  onStop,
+  isPlaying,
+}) {
   const ref = useRef(null);
 
-  // DROP target
+  // DROP
   const [, drop] = useDrop({
     accept: ItemType,
     hover(item, monitor) {
@@ -42,47 +37,34 @@ export function PlaylistItem({
 
       const dragIndex = item.index;
       const hoverIndex = index;
-
-      // Don't replace items with themselves
       if (dragIndex === hoverIndex) return;
 
-      // Determine rectangle on screen
       const hoverBoundingRect = ref.current.getBoundingClientRect();
+      const hoverMiddleY =
+        (hoverBoundingRect.bottom - hoverBoundingRect.top) / 2;
 
-      // Get vertical middle
-      const hoverMiddleY = (hoverBoundingRect.bottom - hoverBoundingRect.top) / 2;
-
-      // Determine mouse position
       const clientOffset = monitor.getClientOffset();
       if (!clientOffset) return;
 
-      // Get pixels to the top
       const hoverClientY = clientOffset.y - hoverBoundingRect.top;
 
-      // Only perform the move when the cursor has crossed half of the item's height
-      // Dragging downwards: only move when cursor is below 50%
       if (dragIndex < hoverIndex && hoverClientY < hoverMiddleY) return;
-      // Dragging upwards: only move when cursor is above 50%
       if (dragIndex > hoverIndex && hoverClientY > hoverMiddleY) return;
 
-      // Perform the move
       moveItem(dragIndex, hoverIndex);
-
-      // Note: mutate the dragged item to avoid expensive lookups
       item.index = hoverIndex;
     },
   });
 
-  // DRAG source
+  // DRAG
   const [{ isDragging }, drag] = useDrag({
     type: ItemType,
-    item: { id: video.id, index }, // use stable id + current index
+    item: { id: video.id, index },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
   });
 
-  // connect drag + drop
   drag(drop(ref));
 
   return (
@@ -90,31 +72,66 @@ export function PlaylistItem({
       ref={ref}
       component={Paper}
       sx={{
-        opacity: isDragging ? 0.5 : 1,
+        opacity: isDragging ? 0.4 : 1,
         mb: 1,
+        px: 2,
+        py: 1.5,
         display: "flex",
         alignItems: "center",
         gap: 2,
-        background: "#f5f5f5",
+        border: isPlaying ? "2px solid #2e7d32" : "1px solid #e0e0e0",
+        backgroundColor: isPlaying ? "#e8f5e9" : "background.paper",
+        transition: "all 0.2s ease",
       }}
     >
-      <DragIndicatorIcon sx={{ cursor: "grab" }} />
-      <ListItemText
-        primary={video.videourl}
-        secondary={`Start: ${video.startTime || 0}s, End: ${video.endTime || 0}s, Repeat: ${video.repeate ? "Yes" : "No"}`}
+      {/* Drag handle */}
+      <DragIndicatorIcon
+        sx={{ cursor: "grab", color: "text.secondary" }}
       />
-      {(!isPlaying) ?
-        <Button variant="contained" color="success" size="small" onClick={() => onPlay(index)}>
-          Play
-        </Button>
-        : <Button variant="contained" color="success" size="small" onClick={() => onStop(index)}>
-          Stop
-        </Button>
-      }
-      <IconButton aria-label="edit" onClick={() => onEdit(index)}>
+
+      {/* Video info */}
+      <Box sx={{ flexGrow: 1 }}>
+        <ListItemText
+          primary={video.videourl}
+          secondary={`Start: ${video.startTime || 0}s • End: ${
+            video.endTime || 0
+          }s • Repeat: ${video.repeate ? "Yes" : "No"}`}
+        />
+
+        {isPlaying && (
+          <Chip
+            label="Playing"
+            color="success"
+            size="small"
+            sx={{ mt: 0.5 }}
+          />
+        )}
+      </Box>
+
+      {/* Play / Stop */}
+      {!isPlaying ? (
+        <IconButton
+          color="success"
+          onClick={() => onPlay(index)}
+        >
+          <PlayArrowIcon />
+        </IconButton>
+      ) : (
+        <IconButton
+          color="error"
+          onClick={() => onStop(index)}
+        >
+          <StopIcon />
+        </IconButton>
+      )}
+
+      {/* Edit */}
+      <IconButton onClick={() => onEdit(index)}>
         <EditIcon />
       </IconButton>
-      <IconButton aria-label="delete" onClick={() => onDelete(index)}>
+
+      {/* Delete */}
+      <IconButton onClick={() => onDelete(index)}>
         <DeleteIcon />
       </IconButton>
     </ListItem>

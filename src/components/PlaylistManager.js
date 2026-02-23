@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useMemo } from "react";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import {
@@ -15,6 +15,8 @@ import {
   TextField,
   Typography,
   FormControlLabel,
+  Tooltip,
+  useMediaQuery,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -27,6 +29,11 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import ReactPlayer from 'react-player'
 import { PlaylistItem } from "./PlaylistItem";
+import AddVideoForm from "./AddVideoModal";
+import SaveIcon from "@mui/icons-material/Save";
+import { updatePlaylist } from "../services/search/videoApi";
+import { useSelector } from "react-redux";
+import { makeSelectPlaylistById, selectCurrentPlaylist } from "../features/video/videoSlice";
 const ItemType = "playlistItem";
 
 
@@ -39,8 +46,17 @@ function shuffleArray(array) {
   }
   return arr;
 }
-function PlaylistManager() {
-  const [playlist, setPlaylist] = useState([]);
+function PlaylistManager({playlistId}) {
+  const selectPlaylist = useMemo(makeSelectPlaylistById, []);
+  const currentPlaylist = useSelector(state =>
+    selectPlaylist(state, playlistId)
+  );
+  const [playlist, setPlaylist] = useState(()=>{
+    if (currentPlaylist && currentPlaylist.videos) {
+      return JSON.parse(currentPlaylist.videos);
+    }
+    return [];
+  });
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState({ videourl: "", startTime: "", endTime: "", repeate: false });
   const [editingIdx, setEditingIdx] = useState(null);
@@ -116,7 +132,7 @@ function PlaylistManager() {
       if (playingVideo.repeate) {
         setPlayingVideo(null);
         setTimeout(() => {
-          setPlayingVideo({...playingVideo, count: (playingVideo.count || 0) + 1 }); // reset để phát lại
+          setPlayingVideo({ ...playingVideo, count: (playingVideo.count || 0) + 1 }); // reset để phát lại
         }, 100);
       } else {
         setPlayingVideo(null);
@@ -171,16 +187,80 @@ function PlaylistManager() {
     }
   }, [queue, queueIdx, repeatAll]);
 
+  const [open, setOpen] = useState(false);
+  const isMobile = useMediaQuery('(max-width:600px)');
+  const handleSavePlaylist = async () => {
+    const { result, error } = await updatePlaylist(playlistId, {
+      videos: JSON.stringify(playlist.map(({ videourl, startTime, endTime, repeate }) => ({
+        videourl, startTime, endTime, repeate
+      })))
+    });
+    if (result) {
+      console.log("Playlist saved successfully!");
+    } else {
+      console.log("Failed to save playlist: " + error);
+    }
+  };
+
   return (
     <DndProvider backend={HTML5Backend}>
-      <Container maxWidth="sm" sx={{ py: 4 }}>
+      <Container sx={{ py: 1 }}>
         <Typography variant="h4" gutterBottom>
-          Playlist Manager
+          {currentPlaylist?.title || "Playlist Manager"}
         </Typography>
-        {/* playall, shuffle, repeat all */}
-        {PlayMode(startPlayAll, playlist, repeatAll, setRepeatAll)}
+
+
+        <Box
+          display="flex"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ mb: 2 }}
+        >
+          {/* Left side: play controls */}
+          <Box display="flex" alignItems="center" gap={1}>
+            {PlayMode(startPlayAll, playlist, repeatAll, setRepeatAll)}
+          </Box>
+
+          {/* Right side: save button */}
+          {(!isMobile) ? (
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleSavePlaylist}
+              startIcon={<SaveIcon />}
+              disabled={playlist.length === 0}
+            >
+              Save Playlist
+            </Button>
+          ) : (
+            <Tooltip title="Save Playlist">
+              <IconButton
+                color="primary"
+                onClick={handleSavePlaylist}
+              >
+                <SaveIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+
+        </Box>
+
         {/* form thêm video */}
-        <AddVideoForm setPlaylist={setPlaylist} />
+        <Button
+          variant="contained"
+          onClick={() => setOpen(true)}
+        >
+          Add Video
+        </Button>
+
+        <AddVideoForm
+          open={open}
+          onClose={() => setOpen(false)}
+          setPlaylist={setPlaylist}
+        />
+
+
+        {/* videos list với drag-and-drop, edit, delete, play */}
         <List>
           {playlist.map((video, idx) => (
             <PlaylistItem
@@ -190,7 +270,7 @@ function PlaylistManager() {
               moveItem={moveItem}
               onEdit={handleEdit}
               onDelete={handleDelete}
-              onPlay={()=>handlePlay(video)}
+              onPlay={() => handlePlay(video)}
               onStop={handleStop}
               isPlaying={playingVideo !== null && playingVideo.id === video.id}
             />
@@ -254,7 +334,7 @@ const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPaus
 })
 
 function PlayMode(startPlayAll, playlist, repeatAll, setRepeatAll) {
-  return <Stack direction="row" spacing={2} alignItems="center" mb={2}>
+  return <Stack direction="row" spacing={2} alignItems="center">
     <Button
       variant="contained"
       color="primary"
@@ -279,86 +359,6 @@ function PlayMode(startPlayAll, playlist, repeatAll, setRepeatAll) {
         onChange={e => setRepeatAll(e.target.checked)} />}
       label="Lặp lại toàn bộ playlist" />
   </Stack>;
-}
-
-function AddVideoForm({ setPlaylist }) {
-  const [editForm, setEditForm] = useState({
-    videourl: "",
-    startTime: "",
-    endTime: "",
-    repeate: false,
-  });
-
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setEditForm((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!editForm.videourl) return;
-    setPlaylist((pl) => [...pl, { id: crypto.randomUUID(), ...editForm }]);
-    setEditForm({
-      videourl: "",
-      startTime: "",
-      endTime: "",
-      repeate: false,
-    });
-  };
-
-  return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ mb: 3 }}>
-      <Stack spacing={2} direction="row" alignItems="center">
-        <TextField
-          label="Video URL"
-          name="videourl"
-          variant="outlined"
-          size="small"
-          value={editForm.videourl}
-          onChange={handleChange}
-          required
-          sx={{ flex: 2 }}
-        />
-        <TextField
-          label="Start (s)"
-          name="startTime"
-          variant="outlined"
-          size="small"
-          type="number"
-          value={editForm.startTime}
-          onChange={handleChange}
-          sx={{ width: 110 }}
-        />
-        <TextField
-          label="End (s)"
-          name="endTime"
-          variant="outlined"
-          size="small"
-          type="number"
-          value={editForm.endTime}
-          onChange={handleChange}
-          sx={{ width: 110 }}
-        />
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={editForm.repeate}
-              name="repeate"
-              onChange={handleChange}
-            />
-          }
-          label="Repeat"
-          sx={{ mx: 1 }}
-        />
-        <Button type="submit" variant="contained" color="primary">
-          Add
-        </Button>
-      </Stack>
-    </Box>
-  );
 }
 
 function editModal(editModalOpen, setEditModalOpen, editForm, setEditForm, setPlaylist, editingIdx, setEditingIdx) {
