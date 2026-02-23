@@ -46,6 +46,7 @@ function PlaylistManager() {
   const [editingIdx, setEditingIdx] = useState(null);
   const [playingVideo, setPlayingVideo] = useState(null);
   const [repeatAll, setRepeatAll] = useState(false);
+  const [repeateOne, setRepeateOne] = useState(false);
   const [queue, setQueue] = useState([]);
   const [queueIdx, setQueueIdx] = useState(false);
 
@@ -63,6 +64,11 @@ function PlaylistManager() {
     setEditForm({ videourl: "", startTime: "", endTime: "", repeate: false });
   };
 
+  const handlePlay = (video) => {
+    setQueueIdx(null);
+    setPlayingVideo(video);
+  }
+
   const moveItem = (from, to) => {
     const updated = [...playlist];
     const [moved] = updated.splice(from, 1);
@@ -72,6 +78,7 @@ function PlaylistManager() {
 
   // Hàm play all với hoặc không shuffle
   const startPlayAll = (shuffle) => {
+    setPlayingVideo(null);
     if (shuffle) {
       const newList = shuffleArray(playlist); // gọi hàm trộn
       setQueue(newList);
@@ -106,9 +113,16 @@ function PlaylistManager() {
     setPlayedSeconds(playerRef.current.currentTime);
     // Khi đạt đến end (nếu có), dừng video
     if (playingVideo.endTime && playerRef.current.currentTime >= playingVideo.endTime) {
-      setPlayingVideo(null)
+      if (playingVideo.repeate) {
+        setPlayingVideo(null);
+        setTimeout(() => {
+          setPlayingVideo({...playingVideo, count: (playingVideo.count || 0) + 1 }); // reset để phát lại
+        }, 100);
+      } else {
+        setPlayingVideo(null);
+      }
     }
-  }, [ playingVideo]);
+  }, [playingVideo]);
 
   const handleStop = useCallback(() => {
     setPlayingVideo(null)
@@ -116,7 +130,7 @@ function PlaylistManager() {
 
   const onPlayAll = useCallback(() => {
     console.log("Video started");
-    console.log(playerRef.current)
+    // console.log(playerRef.current)
     const start = queue[queueIdx].startTime
     if (start) {
       if (playerRef.current.currentTime < start) {
@@ -133,15 +147,29 @@ function PlaylistManager() {
     if (queueIdx !== null) {
       const end = queue[queueIdx].endTime;
       if (end && playerRef.current.currentTime >= end) {
-        if (queueIdx >= queue.length) {
-          setQueueIdx(null)
+        const nextIdx = queueIdx + 1;
+        if (nextIdx >= queue.length) {
+          if (repeatAll) {
+            console.log("Restarting playlist from beginning...");
+            if (queue.length === 1) {
+              // playerRef.current.currentTime = queue[0].startTime || 0;
+              setQueueIdx(null);
+              setTimeout(() => {
+                setQueueIdx(0);
+              }, 100);
+            } else {
+              setQueueIdx(0);
+            }
+          } else {
+            setQueueIdx(null);
+          }
         } else {
           // play next video
           setQueueIdx(queueIdx + 1);
         }
       }
     }
-  },[queue, queueIdx]);
+  }, [queue, queueIdx, repeatAll]);
 
   return (
     <DndProvider backend={HTML5Backend}>
@@ -162,7 +190,7 @@ function PlaylistManager() {
               moveItem={moveItem}
               onEdit={handleEdit}
               onDelete={handleDelete}
-              onPlay={()=>setPlayingVideo(video)}
+              onPlay={()=>handlePlay(video)}
               onStop={handleStop}
               isPlaying={playingVideo !== null && playingVideo.id === video.id}
             />
@@ -177,10 +205,18 @@ function PlaylistManager() {
             onPlay={onPlay}
             onStop={onStop}
             handleProgress={handlePlayOneProgress}
-            onReady={onReady} />
+            onReady={onReady}
+            count={playingVideo.count || 0} />
         )}
         {queueIdx !== null && queue[queueIdx] && (
-          PlayVideoBox(playerRef, queue[queueIdx], onPause, onPlayAll, onStop, handlePlayAllProgress, onReady)
+          <PlayVideoBox
+            playerRef={playerRef}
+            video={queue[queueIdx]}
+            onPause={onPause}
+            onPlay={onPlayAll}
+            onStop={onStop}
+            handleProgress={handlePlayAllProgress}
+            onReady={onReady} />
         )}
       </Container>
 
@@ -193,8 +229,8 @@ function PlaylistManager() {
 
 export default PlaylistManager;
 
-const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPause, onPlay, onStop, handleProgress, onReady }) {
-  console.log("PlayVideoBox: ", video.id)
+const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPause, onPlay, onStop, handleProgress, onReady, count }) {
+  console.log("PlayVideoBox: ", video.id, count);
   return <Box sx={{ mt: 2 }}>
     <Typography variant="h6">Now Playing</Typography>
     <ReactPlayer
