@@ -86,6 +86,14 @@ class PlaylistApi extends BaseApi {
     }));
     return {result: playlists}; 
   }
+
+  async getPlaylistById(id) {
+    const {result, error} = await this.getOne(id);
+    if (result) {
+      result.dateCreated = result.dateCreated.toDate().toISOString();
+    }
+    return {result, error};
+  }
   
   async createPlaylist(uid, playlist) {
     const newPlaylist = {
@@ -129,6 +137,7 @@ function playlistWrapMethod(originalMethod, idx) {
 }
 
 export const getAllPlaylists = (uid) => playlistApi.getAll(uid);
+export const getPlaylist = (id) => playlistApi.getPlaylistById(id);
 export const createPlaylist = (uid, playlist) => playlistApi.createPlaylist(uid, playlist);
 export const updatePlaylist = (id, changes) => playlistApi.updatePlaylist(id, changes);
 export const removePlaylist = (id) => playlistApi.remove(id);

@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback, useMemo } from "react";
-import { DndProvider, useDrag, useDrop } from "react-dnd";
+import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import {
   Box,
@@ -8,32 +8,30 @@ import {
   Container,
   IconButton,
   List,
-  ListItem,
-  ListItemText,
-  Paper,
   Stack,
-  TextField,
   Typography,
   FormControlLabel,
   Tooltip,
   useMediaQuery,
+  ToggleButton,
 } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
 import PlaylistPlayIcon from "@mui/icons-material/PlaylistPlay";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
 import ReactPlayer from 'react-player'
 import { PlaylistItem } from "./PlaylistItem";
-import AddVideoForm from "./AddVideoModal";
+import VideoModal from "./VideoModal";
 import SaveIcon from "@mui/icons-material/Save";
-import { updatePlaylist } from "../services/search/videoApi";
+import { getPlaylist, updatePlaylist } from "../services/search/videoApi";
 import { useSelector } from "react-redux";
-import { makeSelectPlaylistById, selectCurrentPlaylist } from "../features/video/videoSlice";
+import { addPlaylist, makeSelectPlaylistById } from "../features/video/videoSlice";
+import AddIcon from "@mui/icons-material/Add";
+
+import RepeatIcon from "@mui/icons-material/Repeat";
+import SkipPreviousIcon from "@mui/icons-material/SkipPrevious";
+import SkipNextIcon from "@mui/icons-material/SkipNext";
+import StopIcon from "@mui/icons-material/Stop";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import { useAppDispatch } from "../app/hooks";
 const ItemType = "playlistItem";
 
 
@@ -46,38 +44,45 @@ function shuffleArray(array) {
   }
   return arr;
 }
-function PlaylistManager({playlistId}) {
+function PlaylistManager({ playlistId }) {
+  const dispatch = useAppDispatch();
   const selectPlaylist = useMemo(makeSelectPlaylistById, []);
   const currentPlaylist = useSelector(state =>
     selectPlaylist(state, playlistId)
   );
-  const [playlist, setPlaylist] = useState(()=>{
+
+  const [playlist, setPlaylist] = useState(() => {
     if (currentPlaylist && currentPlaylist.videos) {
-      return JSON.parse(currentPlaylist.videos);
+      const videoList = JSON.parse(currentPlaylist.videos);
+      videoList.forEach(element => {
+        element.id = crypto.randomUUID()
+      });
+      return videoList;
     }
     return [];
   });
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ videourl: "", startTime: "", endTime: "", repeate: false });
   const [editingIdx, setEditingIdx] = useState(null);
   const [playingVideo, setPlayingVideo] = useState(null);
   const [repeatAll, setRepeatAll] = useState(false);
-  const [repeateOne, setRepeateOne] = useState(false);
+  const [shuffle, setShuffle] = useState(false);
   const [queue, setQueue] = useState([]);
   const [queueIdx, setQueueIdx] = useState(false);
 
   const playerRef = useRef(null);
+  const delay = 2000;
+  const [value, setValue] = useState("");
+  const [debounced, setDebounced] = useState(false);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
 
   const handleEdit = (idx) => {
-    setEditForm(playlist[idx]);
     setEditingIdx(idx);
-    setEditModalOpen(true);
   };
 
   const handleDelete = (idx) => {
     setPlaylist((pl) => pl.filter((_, i) => i !== idx));
-    setEditingIdx(null);
-    setEditForm({ videourl: "", startTime: "", endTime: "", repeate: false });
   };
 
   const handlePlay = (video) => {
@@ -106,13 +111,17 @@ function PlaylistManager({playlistId}) {
 
   // Để xử lý start/end, bạn cần truyền start/end vào và sử dụng onProgress
   const [playedSeconds, setPlayedSeconds] = React.useState(0);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
 
-  const onPause = useCallback(() => console.log("Video paused"), [])
+  const onPause = useCallback(() => {
+    setPlaying(false);
+    console.log("Video paused")
+  }, [])
   const onStop = useCallback(() => console.log("Video ended"), [])
   const onPlay = useCallback(() => {
     console.log("Video started");
-    console.log(playerRef.current)
+    console.log(playerRef.current);
+    setPlaying(true);
     const start = playingVideo.startTime
     if (start) {
       if (playerRef.current.currentTime < start) {
@@ -126,6 +135,7 @@ function PlaylistManager({playlistId}) {
 
   const handlePlayOneProgress = useCallback((progress) => {
     console.log(playerRef.current.currentTime)
+    setValue(playerRef.current.currentTime);
     setPlayedSeconds(playerRef.current.currentTime);
     // Khi đạt đến end (nếu có), dừng video
     if (playingVideo.endTime && playerRef.current.currentTime >= playingVideo.endTime) {
@@ -136,16 +146,19 @@ function PlaylistManager({playlistId}) {
         }, 100);
       } else {
         setPlayingVideo(null);
+        setPlaying(false);
       }
     }
   }, [playingVideo]);
 
   const handleStop = useCallback(() => {
-    setPlayingVideo(null)
+    setPlayingVideo(null);
+    setPlaying(false);
   }, [])
 
   const onPlayAll = useCallback(() => {
     console.log("Video started");
+    setPlaying(true);
     // console.log(playerRef.current)
     const start = queue[queueIdx].startTime
     if (start) {
@@ -178,6 +191,7 @@ function PlaylistManager({playlistId}) {
             }
           } else {
             setQueueIdx(null);
+            setPlaying(false);
           }
         } else {
           // play next video
@@ -187,7 +201,7 @@ function PlaylistManager({playlistId}) {
     }
   }, [queue, queueIdx, repeatAll]);
 
-  const [open, setOpen] = useState(false);
+  const [addVideoOpen, setAddVideoOpen] = useState(false);
   const isMobile = useMediaQuery('(max-width:600px)');
   const handleSavePlaylist = async () => {
     const { result, error } = await updatePlaylist(playlistId, {
@@ -202,107 +216,205 @@ function PlaylistManager({playlistId}) {
     }
   };
 
+  const handleEditVideoSave = (videoInfo) => {
+    // Cập nhật playlist
+    setPlaylist(pl => pl.map((item, idx) => (idx === editingIdx ? { ...videoInfo } : item)));
+    setEditingIdx(null);
+  };
+  const handleAddVideoSave = (videoInfo) => setPlaylist((pl) => [
+    ...pl,
+    { id: crypto.randomUUID(), ...videoInfo }
+  ])
+
+  
+  console.log("debounced: ", debounced);
+
   return (
-    <DndProvider backend={HTML5Backend}>
-      <Container sx={{ py: 1 }}>
-        <Typography variant="h4" gutterBottom>
-          {currentPlaylist?.title || "Playlist Manager"}
-        </Typography>
+    <Box sx={{
+      display: "flex",
+      width: "100%",
+      flexDirection: "column"
+    }}>
+      {/* title */}
+      <Typography variant="h4" gutterBottom margin={2}>
+        {currentPlaylist?.title || "Playlist Manager"}
+      </Typography>
 
+      {/* body layout
+      +---------+----------+
+      |playlist | play area| 
+      +---------+----------+
+      */}
+      <Box
+        display="flex"
+        flexGrow={1}
+        flexDirection={isMobile ? "column" : "row"}
+        sx={{
+          minWidth: "300px",
+          minHeight: "300px",
+          maxWidth: isMobile ?
+            "100vw" : "100vw",
+          justifyContent: isMobile ? "center" : "flex-start"
+        }}
+      >
 
-        <Box
-          display="flex"
-          alignItems="center"
-          justifyContent="space-between"
-          sx={{ mb: 2 }}
-        >
-          {/* Left side: play controls */}
-          <Box display="flex" alignItems="center" gap={1}>
-            {PlayMode(startPlayAll, playlist, repeatAll, setRepeatAll)}
-          </Box>
+        {/* playlist control bar */}
+        <Box sx={{
+          maxWidth: isMobile ? "fit-content" : "500px",
+          flexGrow: isMobile ? 10 : 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "auto"
+        }}>
+          <Box sx={{ p: 2, display: "flex", justifyContent: "space-between" }}>
+            {/* add button */}
 
-          {/* Right side: save button */}
-          {(!isMobile) ? (
             <Button
               variant="contained"
-              color="primary"
-              onClick={handleSavePlaylist}
-              startIcon={<SaveIcon />}
-              disabled={playlist.length === 0}
+              startIcon={<AddIcon />}
+              onClick={() => setAddVideoOpen(true)}
             >
-              Save Playlist
+              Add Video
             </Button>
-          ) : (
-            <Tooltip title="Save Playlist">
-              <IconButton
+            {(true) ? (
+              <Button
+                variant="contained"
                 color="primary"
                 onClick={handleSavePlaylist}
+                startIcon={<SaveIcon />}
+                disabled={playlist.length === 0}
               >
-                <SaveIcon />
-              </IconButton>
-            </Tooltip>
-          )}
+                Save Playlist
+              </Button>
+            ) : (
+              <Tooltip title="Save Playlist">
+                <IconButton
+                  color="primary"
+                  onClick={handleSavePlaylist}
+                >
+                  <SaveIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+
+
+          <Box sx={{
+            display: "flex",
+            flexGrow: 1,
+            minHeight: "200px",
+            overflowY: "scroll",
+            p: 0,
+          }}>
+            <DndProvider backend={HTML5Backend}>
+              <Container sx={{
+                p: 0,
+              }}>
+
+                {/* videos list với drag-and-drop, edit, delete, play */}
+                <List>
+                  {playlist.map((video, idx) => (
+                    <PlaylistItem
+                      key={video.id ?? idx} // ✅ stable key
+                      video={video}
+                      index={idx}
+                      moveItem={moveItem}
+                      onEdit={() => handleEdit(idx)}
+                      onDelete={handleDelete}
+                      onPlay={() => handlePlay(video)}
+                      onStop={handleStop}
+                      isPlaying={playingVideo !== null && playingVideo.id === video.id}
+                    />
+                  ))}
+                </List>
+
+              </Container>
+            </DndProvider>
+          </Box>
+
 
         </Box>
 
-        {/* form thêm video */}
-        <Button
-          variant="contained"
-          onClick={() => setOpen(true)}
-        >
-          Add Video
-        </Button>
+        {/* play area  */}
+        <Box sx={{
+          display: "flex",
+          flexGrow: 10,
+          alignItems: "center",
+          justifyContent: "center"
+        }}>
+          {playingVideo !== null && (
+            <PlayVideoBox
+              playerRef={playerRef}
+              video={playingVideo}
+              onPause={onPause}
+              onPlay={onPlay}
+              onStop={onStop}
+              handleProgress={handlePlayOneProgress}
+              onReady={onReady}
+              count={playingVideo.count || 0} />
+          )}
+          {queueIdx !== null && queue[queueIdx] && (
+            <PlayVideoBox
+              playerRef={playerRef}
+              video={queue[queueIdx]}
+              onPause={onPause}
+              onPlay={onPlayAll}
+              onStop={onStop}
+              handleProgress={handlePlayAllProgress}
+              onReady={onReady} />
+          )}
+        </Box>
 
-        <AddVideoForm
-          open={open}
-          onClose={() => setOpen(false)}
-          setPlaylist={setPlaylist}
+      </Box>
+
+      {/* footter */}
+      {/* playall, shuffle, repeat all */}
+      <Box sx={{ p: 2 }}>
+        <PlayMode startPlayAll={startPlayAll}
+          playlist={playlist}
+          repeatAll={repeatAll}
+          setRepeatAll={setRepeatAll}
+          shuffle={shuffle}
+          setShuffle={setShuffle}
+          isPlaying={playing}
+          onStop={() => { setQueueIdx(null); setPlaying(false); }}
+          onNext={() => {
+            const nextIdx = queueIdx + 1;
+            if (nextIdx >= queue.length) {
+              return;
+            } else {
+              setQueueIdx(nextIdx);
+            }
+          }}
+          onPrev={() => {
+            const nextIdx = queueIdx - 1;
+            if (nextIdx >= 0) {
+              return;
+            } else {
+              setQueueIdx(nextIdx);
+            }
+          }}
         />
+      </Box>
 
+      {/* form thêm video */}
+      {addVideoOpen && <VideoModal
+        open={addVideoOpen}
+        onClose={() => setAddVideoOpen(false)}
+        onSave={handleAddVideoSave}
+      />}
 
-        {/* videos list với drag-and-drop, edit, delete, play */}
-        <List>
-          {playlist.map((video, idx) => (
-            <PlaylistItem
-              key={video.id ?? video.videourl} // ✅ stable key
-              video={video}
-              index={idx}
-              moveItem={moveItem}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onPlay={() => handlePlay(video)}
-              onStop={handleStop}
-              isPlaying={playingVideo !== null && playingVideo.id === video.id}
-            />
-          ))}
-        </List>
+      {(editingIdx !== null) && <VideoModal
+        open={true}
+        onClose={() => setEditingIdx(null)}
+        onSave={handleEditVideoSave}
+        base={playlist[editingIdx]}
+      />}
 
-        {playingVideo !== null && (
-          <PlayVideoBox
-            playerRef={playerRef}
-            video={playingVideo}
-            onPause={onPause}
-            onPlay={onPlay}
-            onStop={onStop}
-            handleProgress={handlePlayOneProgress}
-            onReady={onReady}
-            count={playingVideo.count || 0} />
-        )}
-        {queueIdx !== null && queue[queueIdx] && (
-          <PlayVideoBox
-            playerRef={playerRef}
-            video={queue[queueIdx]}
-            onPause={onPause}
-            onPlay={onPlayAll}
-            onStop={onStop}
-            handleProgress={handlePlayAllProgress}
-            onReady={onReady} />
-        )}
-      </Container>
-
-      {editModal(editModalOpen, setEditModalOpen, editForm, setEditForm, setPlaylist, editingIdx, setEditingIdx)}
-    </DndProvider>
+    </Box>
   );
+
+
 }
 
 
@@ -311,7 +423,12 @@ export default PlaylistManager;
 
 const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPause, onPlay, onStop, handleProgress, onReady, count }) {
   console.log("PlayVideoBox: ", video.id, count);
-  return <Box sx={{ mt: 2 }}>
+  return <Box sx={{
+    m: 2,
+    display: "flex",
+    flexDirection: "column",
+    width: "100%"
+  }}>
     <Typography variant="h6">Now Playing</Typography>
     <ReactPlayer
       ref={playerRef}
@@ -333,8 +450,147 @@ const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPaus
   </Box>;
 })
 
-function PlayMode(startPlayAll, playlist, repeatAll, setRepeatAll) {
-  return <Stack direction="row" spacing={2} alignItems="center">
+function PlayMode({
+  startPlayAll,
+  playlist,
+  repeatAll,
+  setRepeatAll,
+  shuffle,
+  setShuffle,
+  onPrev,
+  onNext,
+  onStop,
+  isPlaying
+}) {
+
+  // Toggle handlers
+  const handleShuffleToggle = () => setShuffle(!shuffle);
+  const handleRepeatToggle = () => setRepeatAll(!repeatAll);
+
+  const isEmpty = useMemo(() => !playlist || playlist.length === 0, [playlist]);
+  return <Stack
+    direction="row"
+    spacing={2}
+    alignItems="center"
+    // justifyContent={"space-between"}
+
+  >
+
+    {/* Left: Transport controls */}
+    <Stack direction="row" spacing={1} alignItems="center">
+
+
+      {/* Prev */}
+      <Tooltip title="Previous">
+        <span>
+          <IconButton
+            onClick={onPrev}
+            disabled={isEmpty || !isPlaying}
+            sx={{ border: "1px solid", borderColor: "divider" }}
+            size="medium"
+          >
+            <SkipPreviousIcon />
+          </IconButton>
+        </span>
+      </Tooltip>
+
+      {/* Play All */}
+      {/* <Button
+        variant="contained"
+        color="primary"
+        onClick={() => startPlayAll(false)}
+        startIcon={<PlaylistPlayIcon />}
+        disabled={isEmpty}
+        sx={{ minWidth: 132 }}
+      >
+        Play All
+      </Button> */}
+      <Tooltip title={isPlaying ? "Play All" : "Stop"}>
+        <span>
+          <IconButton
+            onClick={() => isPlaying ? onStop() : startPlayAll(shuffle)}
+            // disabled={isEmpty || !isPlaying}
+            sx={{ border: "1px solid", borderColor: "divider" }}
+            size="medium"
+          >
+            {isPlaying ? <StopIcon /> : <PlayArrowIcon />}
+          </IconButton>
+        </span>
+      </Tooltip>
+
+      {/* Next */}
+      <Tooltip title="Next">
+        <span>
+          <IconButton
+            onClick={onNext}
+            disabled={isEmpty || !isPlaying}
+            sx={{ border: "1px solid", borderColor: "divider" }}
+            size="medium"
+          >
+            <SkipNextIcon />
+          </IconButton>
+        </span>
+      </Tooltip>
+    </Stack>
+
+    {/* Right: Modes */}
+    <Stack direction="row" spacing={1} alignItems="center">
+      {/* Shuffle toggle */}
+      <Tooltip title={shuffle ? "Shuffle: On" : "Shuffle: Off"}>
+        <ToggleButton
+          value="shuffle"
+          selected={shuffle}
+          onChange={handleShuffleToggle}
+          disabled={isEmpty}
+          size="small"
+          sx={{
+            px: 1.25,
+            borderRadius: 2,
+            "&.Mui-selected": {
+              bgcolor: "primary.50",
+              borderColor: "primary.light",
+              color: "primary.main",
+              "&:hover": { bgcolor: "primary.100" },
+            },
+          }}
+        >
+          <ShuffleIcon fontSize="small" />
+        </ToggleButton>
+      </Tooltip>
+
+      {/* Repeat toggle */}
+      <Tooltip title={repeatAll ? "Repeat All: On" : "Repeat All: Off"}>
+        <ToggleButton
+          value="repeat"
+          selected={repeatAll}
+          onChange={handleRepeatToggle}
+          disabled={isEmpty}
+          size="small"
+          sx={{
+            px: 1.25,
+            borderRadius: 2,
+            "&.Mui-selected": {
+              bgcolor: "success.50",
+              borderColor: "success.light",
+              color: "success.main",
+              "&:hover": { bgcolor: "success.100" },
+            },
+          }}
+        >
+          <RepeatIcon fontSize="small" />
+        </ToggleButton>
+      </Tooltip>
+
+      {/* (Tùy chọn) Nhóm toggle nếu muốn gom */}
+      {/* 
+        <ToggleButtonGroup exclusive>
+          <ToggleButton ...> <ShuffleIcon/> </ToggleButton>
+          <ToggleButton ...> <RepeatIcon/> </ToggleButton>
+        </ToggleButtonGroup>
+        */}
+    </Stack>
+
+{/* 
     <Button
       variant="contained"
       color="primary"
@@ -352,71 +608,12 @@ function PlayMode(startPlayAll, playlist, repeatAll, setRepeatAll) {
       disabled={playlist.length === 0}
     >
       Shuffle
-    </Button>
-    <FormControlLabel
+    </Button> */}
+    {/* <FormControlLabel
       control={<Checkbox
         checked={repeatAll}
         onChange={e => setRepeatAll(e.target.checked)} />}
-      label="Lặp lại toàn bộ playlist" />
+      label="Lặp lại toàn bộ playlist" /> */}
   </Stack>;
 }
 
-function editModal(editModalOpen, setEditModalOpen, editForm, setEditForm, setPlaylist, editingIdx, setEditingIdx) {
-  return <Dialog open={editModalOpen} onClose={() => setEditModalOpen(false)} maxWidth="sm" fullWidth>
-    <DialogTitle>Chỉnh sửa video</DialogTitle>
-    <DialogContent>
-      <Stack spacing={2} mt={1}>
-        <TextField
-          label="Video URL"
-          name="videourl"
-          variant="outlined"
-          size="small"
-          value={editForm.videourl}
-          onChange={e => setEditForm(f => ({ ...f, videourl: e.target.value }))}
-          required />
-        <TextField
-          label="Start (s)"
-          name="startTime"
-          variant="outlined"
-          size="small"
-          type="number"
-          value={editForm.startTime}
-          onChange={e => setEditForm(f => ({ ...f, startTime: e.target.value }))} />
-        <TextField
-          label="End (s)"
-          name="endTime"
-          variant="outlined"
-          size="small"
-          type="number"
-          value={editForm.endTime}
-          onChange={e => setEditForm(f => ({ ...f, endTime: e.target.value }))} />
-        <FormControlLabel
-          control={<Checkbox
-            checked={editForm.repeate}
-            onChange={e => setEditForm(f => ({ ...f, repeate: e.target.checked }))} />}
-          label="Repeat" />
-      </Stack>
-    </DialogContent>
-    <DialogActions>
-      <Button
-        onClick={() => setEditModalOpen(false)}
-        color="secondary"
-        variant="outlined"
-      >
-        Hủy
-      </Button>
-      <Button
-        variant="contained"
-        onClick={() => {
-          // Cập nhật playlist
-          setPlaylist(pl => pl.map((item, idx) => (idx === editingIdx ? { ...editForm } : item))
-          );
-          setEditModalOpen(false);
-          setEditingIdx(null);
-        }}
-      >
-        Lưu
-      </Button>
-    </DialogActions>
-  </Dialog>;
-}
