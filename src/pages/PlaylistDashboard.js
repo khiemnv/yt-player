@@ -261,7 +261,7 @@ export default function PlaylistDashboard() {
           <TextField
             fullWidth
             multiline
-            rows={3}
+            rows={5}
             label="Note"
             value={form.note}
             onChange={e => setForm({ ...form, note: e.target.value })}

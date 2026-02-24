@@ -9,6 +9,9 @@ import {
   Checkbox,
   FormControlLabel
 } from "@mui/material";
+import { LocalizationProvider, TimePicker } from "@mui/x-date-pickers";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import dayjs from "dayjs";
 import { useState } from "react";
 
 function VideoModal({
@@ -22,7 +25,7 @@ function VideoModal({
     repeate: false,
   },
   mode = "add"
- }) {
+}) {
   const [editForm, setEditForm] = useState(base);
 
   const handleChange = (e) => {
@@ -48,7 +51,7 @@ function VideoModal({
       fullWidth
       maxWidth="sm"
     >
-      <DialogTitle>{mode="add"?"Add Video":"Edit Video"}</DialogTitle>
+      <DialogTitle>{mode = "add" ? "Add Video" : "Edit Video"}</DialogTitle>
 
       <DialogContent>
         <VideoForm videoInfo={editForm} handleChange={handleChange} />
@@ -68,7 +71,19 @@ function VideoModal({
 }
 
 export default VideoModal;
+const secondsToDayjs = (seconds) => {
+  if (!seconds) return dayjs().startOf("day");
+  return dayjs().startOf("day").add(seconds, "second");
+};
 
+const dayjsToSeconds = (value) => {
+  if (!value) return 0;
+  return (
+    value.hour() * 3600 +
+    value.minute() * 60 +
+    value.second()
+  );
+};
 function VideoForm({ videoInfo, handleChange }) {
   return <Stack spacing={2} sx={{ mt: 1 }}>
     <TextField
@@ -79,22 +94,45 @@ function VideoForm({ videoInfo, handleChange }) {
       required
       fullWidth />
 
-    <Stack direction="row" spacing={2}>
-      <TextField
-        label="Start (s)"
-        name="startTime"
-        type="number"
-        value={videoInfo.startTime}
-        onChange={handleChange}
-        fullWidth />
-      <TextField
-        label="End (s)"
-        name="endTime"
-        type="number"
-        value={videoInfo.endTime}
-        onChange={handleChange}
-        fullWidth />
-    </Stack>
+    <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+
+        <TimePicker
+          label="Start Time"
+          views={["hours", "minutes", "seconds"]}
+          format="HH:mm:ss"
+          value={secondsToDayjs(videoInfo.startTime)}
+          onChange={(newValue) => {
+            const target = {
+              name: "startTime",
+              value: dayjsToSeconds(newValue),  
+              type: "text"
+            };
+            handleChange({target});
+          }
+          }
+          slotProps={{ textField: { fullWidth: true } }}
+        />
+
+        <TimePicker
+          label="End Time"
+          views={["hours", "minutes", "seconds"]}
+          format="HH:mm:ss"
+          value={secondsToDayjs(videoInfo.endTime)}
+          onChange={(newValue) => {
+            const target = {
+              name: "endTime",
+              value: dayjsToSeconds(newValue),
+              type: "text"
+            };
+            handleChange({target});
+          }
+          }
+          slotProps={{ textField: { fullWidth: true } }}
+        />
+
+      </Stack>
+    </LocalizationProvider>
 
     <FormControlLabel
       control={<Checkbox
@@ -107,12 +145,12 @@ function VideoForm({ videoInfo, handleChange }) {
 
 
 function editModal(editModalOpen, setEditModalOpen, editForm, setEditForm, setPlaylist, editingIdx, setEditingIdx, onSave) {
-  return <Dialog 
-  open={editModalOpen}
-   onClose={() => setEditModalOpen(false)} 
-   maxWidth="sm" 
-   fullWidth
-   >
+  return <Dialog
+    open={editModalOpen}
+    onClose={() => setEditModalOpen(false)}
+    maxWidth="sm"
+    fullWidth
+  >
     <DialogTitle>Chỉnh sửa video</DialogTitle>
     <DialogContent>
       <Stack spacing={2} mt={1}>

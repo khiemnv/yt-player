@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useRef, useCallback, useMemo, useEffect, use } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import {
@@ -14,6 +14,12 @@ import {
   Tooltip,
   useMediaQuery,
   ToggleButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  ListItem,
+  Paper,
 } from "@mui/material";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
 import PlaylistPlayIcon from "@mui/icons-material/PlaylistPlay";
@@ -31,10 +37,31 @@ import SkipPreviousIcon from "@mui/icons-material/SkipPrevious";
 import SkipNextIcon from "@mui/icons-material/SkipNext";
 import StopIcon from "@mui/icons-material/Stop";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+
 import { useAppDispatch } from "../app/hooks";
+import { set } from "firebase/database";
 const ItemType = "playlistItem";
 
+const isPlaylistChanged = (a = [], b = []) => {
+  if (a.length !== b.length) return true;
 
+  for (let i = 0; i < a.length; i++) {
+    const itemA = a[i];
+    const itemB = b[i];
+
+    if (
+      itemA.videourl !== itemB.videourl ||
+      Number(itemA.startTime) !== Number(itemB.startTime) ||
+      Number(itemA.endTime) !== Number(itemB.endTime) ||
+      itemA.repeate !== itemB.repeate
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+};
 // Hàm trộn mảng sử dụng thuật toán Fisher-Yates
 function shuffleArray(array) {
   const arr = [...array]; // sao chép mảng để không làm thay đổi mảng gốc
@@ -51,16 +78,17 @@ function PlaylistManager({ playlistId }) {
     selectPlaylist(state, playlistId)
   );
 
-  const [playlist, setPlaylist] = useState(() => {
+  const [originalPlaylist, setOriginalPlaylist] = useState([]);
+  const [playlist, setPlaylist] = useState([]);
+
+  useEffect(() => {
     if (currentPlaylist && currentPlaylist.videos) {
       const videoList = JSON.parse(currentPlaylist.videos);
-      videoList.forEach(element => {
-        element.id = crypto.randomUUID()
-      });
-      return videoList;
+      setOriginalPlaylist(videoList);
+      setPlaylist(videoList.map(element => ({ ...element, id: crypto.randomUUID() })));
     }
-    return [];
-  });
+  }, [currentPlaylist]);
+
   const [editingIdx, setEditingIdx] = useState(null);
   const [playingVideo, setPlayingVideo] = useState(null);
   const [repeatAll, setRepeatAll] = useState(false);
@@ -69,13 +97,7 @@ function PlaylistManager({ playlistId }) {
   const [queueIdx, setQueueIdx] = useState(false);
 
   const playerRef = useRef(null);
-  const delay = 2000;
-  const [value, setValue] = useState("");
-  const [debounced, setDebounced] = useState(false);
-  useEffect(() => {
-    const handler = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(handler);
-  }, [value, delay]);
+  const timeUpdateRef = useRef(null);
 
   const handleEdit = (idx) => {
     setEditingIdx(idx);
@@ -114,14 +136,14 @@ function PlaylistManager({ playlistId }) {
   const [playing, setPlaying] = useState(false);
 
   const onPause = useCallback(() => {
-    setPlaying(false);
+    // setPlaying(false);
     console.log("Video paused")
   }, [])
   const onStop = useCallback(() => console.log("Video ended"), [])
   const onPlay = useCallback(() => {
     console.log("Video started");
     console.log(playerRef.current);
-    setPlaying(true);
+    // setPlaying(true);
     const start = playingVideo.startTime
     if (start) {
       if (playerRef.current.currentTime < start) {
@@ -134,8 +156,14 @@ function PlaylistManager({ playlistId }) {
   }, [])
 
   const handlePlayOneProgress = useCallback((progress) => {
-    console.log(playerRef.current.currentTime)
-    setValue(playerRef.current.currentTime);
+    console.log(playerRef.current.currentTime, Date.now());
+
+    setPlaying(true); // đảm bảo đang ở trạng thái phát
+    timeUpdateRef.current && clearTimeout(timeUpdateRef.current);
+    timeUpdateRef.current = setTimeout(() => {
+      setPlaying(false);
+    }, 1000);
+
     setPlayedSeconds(playerRef.current.currentTime);
     // Khi đạt đến end (nếu có), dừng video
     if (playingVideo.endTime && playerRef.current.currentTime >= playingVideo.endTime) {
@@ -146,19 +174,19 @@ function PlaylistManager({ playlistId }) {
         }, 100);
       } else {
         setPlayingVideo(null);
-        setPlaying(false);
+        // setPlaying(false);
       }
     }
   }, [playingVideo]);
 
   const handleStop = useCallback(() => {
     setPlayingVideo(null);
-    setPlaying(false);
+    // setPlaying(false);
   }, [])
 
   const onPlayAll = useCallback(() => {
     console.log("Video started");
-    setPlaying(true);
+    // setPlaying(true);
     // console.log(playerRef.current)
     const start = queue[queueIdx].startTime
     if (start) {
@@ -170,8 +198,14 @@ function PlaylistManager({ playlistId }) {
 
   const handlePlayAllProgress = useCallback((progress) => {
     // console.log(progress)
-    console.log(playerRef.current.currentTime)
-    setPlayedSeconds(playerRef.current.currentTime);
+    console.log(playerRef.current.currentTime, Date.now());
+
+    setPlaying(true); // đảm bảo đang ở trạng thái phát
+    timeUpdateRef.current && clearTimeout(timeUpdateRef.current);
+    timeUpdateRef.current = setTimeout(() => {
+      setPlaying(false);
+    }, 1000);
+
     // Khi đạt đến end (nếu có), dừng video
     if (queueIdx !== null) {
       const end = queue[queueIdx].endTime;
@@ -191,7 +225,7 @@ function PlaylistManager({ playlistId }) {
             }
           } else {
             setQueueIdx(null);
-            setPlaying(false);
+            // setPlaying(false);
           }
         } else {
           // play next video
@@ -226,8 +260,11 @@ function PlaylistManager({ playlistId }) {
     { id: crypto.randomUUID(), ...videoInfo }
   ])
 
-  
-  console.log("debounced: ", debounced);
+  const isDirty = useMemo(
+    () => isPlaylistChanged(playlist, originalPlaylist),
+    [playlist, originalPlaylist]
+  );
+
 
   return (
     <Box sx={{
@@ -236,9 +273,35 @@ function PlaylistManager({ playlistId }) {
       flexDirection: "column"
     }}>
       {/* title */}
-      <Typography variant="h4" gutterBottom margin={2}>
-        {currentPlaylist?.title || "Playlist Manager"}
-      </Typography>
+      <Box
+        sx={{
+          p: 2,
+          display: "flex",
+          alignItems: "center"
+        }}
+      >
+
+
+        {/* Save Playlist */}
+        <Tooltip
+          title={isDirty ? "Save Playlist" : "No changes"}
+        >
+          <span>
+            <IconButton
+              color="primary"
+              onClick={handleSavePlaylist}
+              disabled={!isDirty}
+              sx={{
+                border: "1px solid",
+                borderColor: isDirty ? "primary.main" : "divider"
+              }}
+            >
+              <SaveIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <PlaylistTitle currentPlaylist={currentPlaylist} />
+      </Box>
 
       {/* body layout
       +---------+----------+
@@ -266,37 +329,7 @@ function PlaylistManager({ playlistId }) {
           flexDirection: "column",
           overflow: "auto"
         }}>
-          <Box sx={{ p: 2, display: "flex", justifyContent: "space-between" }}>
-            {/* add button */}
 
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setAddVideoOpen(true)}
-            >
-              Add Video
-            </Button>
-            {(true) ? (
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleSavePlaylist}
-                startIcon={<SaveIcon />}
-                disabled={playlist.length === 0}
-              >
-                Save Playlist
-              </Button>
-            ) : (
-              <Tooltip title="Save Playlist">
-                <IconButton
-                  color="primary"
-                  onClick={handleSavePlaylist}
-                >
-                  <SaveIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Box>
 
 
           <Box sx={{
@@ -323,9 +356,39 @@ function PlaylistManager({ playlistId }) {
                       onDelete={handleDelete}
                       onPlay={() => handlePlay(video)}
                       onStop={handleStop}
-                      isPlaying={playingVideo !== null && playingVideo.id === video.id}
+                      isPlaying={video.id === playingVideo?.id || video.id === queue[queueIdx]?.id}
                     />
                   ))}
+
+                  <ListItem
+                    component={Paper}
+                    sx={{
+                      mb: 1,
+                      px: 2,
+                      py: 1.5,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 2,
+                      border: "1px solid #e0e0e0",
+                      backgroundColor: "background.paper",
+                      transition: "all 0.2s ease"
+                    }}
+                  >
+                    {/* Add Video */}
+                    <Tooltip title="Add Video">
+                      <IconButton
+                        color="primary"
+                        onClick={() => setAddVideoOpen(true)}
+                        sx={{
+                          border: "1px solid",
+                          borderColor: "divider"
+                        }}
+                      >
+                        <AddIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </ListItem>
                 </List>
 
               </Container>
@@ -377,7 +440,10 @@ function PlaylistManager({ playlistId }) {
           shuffle={shuffle}
           setShuffle={setShuffle}
           isPlaying={playing}
-          onStop={() => { setQueueIdx(null); setPlaying(false); }}
+          onStop={() => {
+            setQueueIdx(null);
+            // setPlaying(false); 
+          }}
           onNext={() => {
             const nextIdx = queueIdx + 1;
             if (nextIdx >= queue.length) {
@@ -450,6 +516,62 @@ const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPaus
   </Box>;
 })
 
+function PlaylistTitle({ currentPlaylist }) {
+  const [infoOpen, setInfoOpen] = useState(false);
+
+  return <><Box
+    sx={{
+      display: "flex",
+      alignItems: "center",
+      gap: 1,
+      m: 2
+    }}
+  >
+    {currentPlaylist?.note && (
+      <Tooltip
+        title={"Note"}
+      >
+        <span>
+          <IconButton
+            onClick={() => setInfoOpen(true)}
+            sx={{
+              border: "1px solid",
+              borderColor: "divider"
+            }}
+          >
+            <InfoOutlinedIcon />
+          </IconButton>
+        </span>
+      </Tooltip>
+    )}
+
+    <Typography variant="h4">
+      {currentPlaylist?.title || "Playlist Manager"}
+    </Typography>
+  </Box>
+    <Dialog
+      open={infoOpen}
+      onClose={() => setInfoOpen(false)}
+      maxWidth="sm"
+      fullWidth
+    >
+      {/* <DialogTitle>Playlist Note</DialogTitle> */}
+
+      <DialogContent dividers>
+        <Typography variant="body1" sx={{ whiteSpace: "pre-line" }}>
+          {currentPlaylist?.note || "No note available."}
+        </Typography>
+      </DialogContent>
+
+      <DialogActions>
+        <Button onClick={() => setInfoOpen(false)}>
+          Close
+        </Button>
+      </DialogActions>
+    </Dialog>
+  </>;
+}
+
 function PlayMode({
   startPlayAll,
   playlist,
@@ -472,7 +594,7 @@ function PlayMode({
     direction="row"
     spacing={2}
     alignItems="center"
-    // justifyContent={"space-between"}
+  // justifyContent={"space-between"}
 
   >
 
@@ -590,7 +712,7 @@ function PlayMode({
         */}
     </Stack>
 
-{/* 
+    {/* 
     <Button
       variant="contained"
       color="primary"
