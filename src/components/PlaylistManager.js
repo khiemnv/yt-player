@@ -156,13 +156,13 @@ function PlaylistManager({ playlistId }) {
   }, [])
 
   const handlePlayOneProgress = useCallback((progress) => {
-    console.log(playerRef.current.currentTime, Date.now());
+    // console.log(playerRef.current.currentTime, new Date().getSeconds());
 
-    setPlaying(true); // đảm bảo đang ở trạng thái phát
-    timeUpdateRef.current && clearTimeout(timeUpdateRef.current);
-    timeUpdateRef.current = setTimeout(() => {
-      setPlaying(false);
-    }, 1000);
+    // setPlaying(true); // đảm bảo đang ở trạng thái phát
+    // timeUpdateRef.current && clearTimeout(timeUpdateRef.current);
+    // timeUpdateRef.current = setTimeout(() => {
+    //   setPlaying(false);
+    // }, 1000);
 
     setPlayedSeconds(playerRef.current.currentTime);
     // Khi đạt đến end (nếu có), dừng video
@@ -174,19 +174,19 @@ function PlaylistManager({ playlistId }) {
         }, 100);
       } else {
         setPlayingVideo(null);
-        // setPlaying(false);
+        setPlaying(false);
       }
     }
   }, [playingVideo]);
 
   const handleStop = useCallback(() => {
     setPlayingVideo(null);
-    // setPlaying(false);
+    setPlaying(false);
   }, [])
 
   const onPlayAll = useCallback(() => {
     console.log("Video started");
-    // setPlaying(true);
+    setPlaying(true);
     // console.log(playerRef.current)
     const start = queue[queueIdx].startTime
     if (start) {
@@ -198,13 +198,13 @@ function PlaylistManager({ playlistId }) {
 
   const handlePlayAllProgress = useCallback((progress) => {
     // console.log(progress)
-    console.log(playerRef.current.currentTime, Date.now());
+    // console.log(playerRef.current.currentTime, new Date().getSeconds());
 
-    setPlaying(true); // đảm bảo đang ở trạng thái phát
-    timeUpdateRef.current && clearTimeout(timeUpdateRef.current);
-    timeUpdateRef.current = setTimeout(() => {
-      setPlaying(false);
-    }, 1000);
+    // setPlaying(true); // đảm bảo đang ở trạng thái phát
+    // timeUpdateRef.current && clearTimeout(timeUpdateRef.current);
+    // timeUpdateRef.current = setTimeout(() => {
+    //   setPlaying(false);
+    // }, 1000);
 
     // Khi đạt đến end (nếu có), dừng video
     if (queueIdx !== null) {
@@ -225,7 +225,7 @@ function PlaylistManager({ playlistId }) {
             }
           } else {
             setQueueIdx(null);
-            // setPlaying(false);
+            setPlaying(false);
           }
         } else {
           // play next video
@@ -442,7 +442,7 @@ function PlaylistManager({ playlistId }) {
           isPlaying={playing}
           onStop={() => {
             setQueueIdx(null);
-            // setPlaying(false); 
+            setPlaying(false); 
           }}
           onNext={() => {
             const nextIdx = queueIdx + 1;
