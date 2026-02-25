@@ -129,111 +129,54 @@ function PlaylistManager({ playlistId }) {
       setQueue([...playlist]);
     }
     setQueueIdx(0);
+    setPlaying(true);
   };
 
-  // Để xử lý start/end, bạn cần truyền start/end vào và sử dụng onProgress
-  const [playedSeconds, setPlayedSeconds] = React.useState(0);
   const [playing, setPlaying] = useState(false);
 
-  const onPause = useCallback(() => {
-    // setPlaying(false);
-    console.log("Video paused")
-  }, [])
-  const onStop = useCallback(() => console.log("Video ended"), [])
-  const onPlay = useCallback(() => {
-    console.log("Video started");
-    console.log(playerRef.current);
-    // setPlaying(true);
-    const start = playingVideo.startTime
-    if (start) {
-      if (playerRef.current.currentTime < start) {
-        playerRef.current.currentTime = start;
-      }
-    }
-  }, [playingVideo])
-  const onReady = useCallback(() => () => {
-    console.log("Video ready");
-  }, [])
-
-  const handlePlayOneProgress = useCallback((progress) => {
-    // console.log(playerRef.current.currentTime, new Date().getSeconds());
-
-    // setPlaying(true); // đảm bảo đang ở trạng thái phát
-    // timeUpdateRef.current && clearTimeout(timeUpdateRef.current);
-    // timeUpdateRef.current = setTimeout(() => {
-    //   setPlaying(false);
-    // }, 1000);
-
-    setPlayedSeconds(playerRef.current.currentTime);
-    // Khi đạt đến end (nếu có), dừng video
-    if (playingVideo.endTime && playerRef.current.currentTime >= playingVideo.endTime) {
-      if (playingVideo.repeate) {
-        setPlayingVideo(null);
-        setTimeout(() => {
-          setPlayingVideo({ ...playingVideo, count: (playingVideo.count || 0) + 1 }); // reset để phát lại
-        }, 100);
-      } else {
-        setPlayingVideo(null);
-        setPlaying(false);
-      }
+  const nextOrStopOne = useCallback(() => {
+    if (playingVideo.repeate) {
+      playerRef.current.currentTime = (playingVideo.startTime || 0);
+    } else {
+      setPlayingVideo(null);
+      setPlaying(false);
     }
   }, [playingVideo]);
+
+  const onStopOne = useCallback(() => {
+    console.log("Video ended");
+    nextOrStopOne();
+  }, [nextOrStopOne])
 
   const handleStop = useCallback(() => {
     setPlayingVideo(null);
     setPlaying(false);
   }, [])
 
-  const onPlayAll = useCallback(() => {
-    console.log("Video started");
-    setPlaying(true);
-    // console.log(playerRef.current)
-    const start = queue[queueIdx].startTime
-    if (start) {
-      if (playerRef.current.currentTime < start) {
-        playerRef.current.currentTime = start;
-      }
-    }
-  }, [queue, queueIdx])
-
-  const handlePlayAllProgress = useCallback((progress) => {
-    // console.log(progress)
-    // console.log(playerRef.current.currentTime, new Date().getSeconds());
-
-    // setPlaying(true); // đảm bảo đang ở trạng thái phát
-    // timeUpdateRef.current && clearTimeout(timeUpdateRef.current);
-    // timeUpdateRef.current = setTimeout(() => {
-    //   setPlaying(false);
-    // }, 1000);
-
-    // Khi đạt đến end (nếu có), dừng video
-    if (queueIdx !== null) {
-      const end = queue[queueIdx].endTime;
-      if (end && playerRef.current.currentTime >= end) {
-        const nextIdx = queueIdx + 1;
-        if (nextIdx >= queue.length) {
-          if (repeatAll) {
-            console.log("Restarting playlist from beginning...");
-            if (queue.length === 1) {
-              // playerRef.current.currentTime = queue[0].startTime || 0;
-              setQueueIdx(null);
-              setTimeout(() => {
-                setQueueIdx(0);
-              }, 100);
-            } else {
-              setQueueIdx(0);
-            }
-          } else {
-            setQueueIdx(null);
-            setPlaying(false);
-          }
+  const stopAllOrNext = useCallback(() => {
+    const nextIdx = queueIdx + 1;
+    if (nextIdx >= queue.length) {
+      if (repeatAll) {
+        console.log("Restarting playlist from beginning...");
+        if (queue.length === 1) {
+          playerRef.current.currentTime = (queue[0].startTime || 0);
         } else {
-          // play next video
-          setQueueIdx(queueIdx + 1);
+          setQueueIdx(0);
         }
+      } else {
+        setQueueIdx(null);
+        setPlaying(false);
       }
+    } else {
+      // play next video
+      setQueueIdx(queueIdx + 1);
     }
   }, [queue, queueIdx, repeatAll]);
+
+  const onStopAll = useCallback(() => {
+    console.log("Video ended");
+    stopAllOrNext();
+  }, [stopAllOrNext])
 
   const [addVideoOpen, setAddVideoOpen] = useState(false);
   const isMobile = useMediaQuery('(max-width:600px)');
@@ -409,22 +352,15 @@ function PlaylistManager({ playlistId }) {
             <PlayVideoBox
               playerRef={playerRef}
               video={playingVideo}
-              onPause={onPause}
-              onPlay={onPlay}
-              onStop={onStop}
-              handleProgress={handlePlayOneProgress}
-              onReady={onReady}
+              onStop={onStopOne}
               count={playingVideo.count || 0} />
           )}
           {queueIdx !== null && queue[queueIdx] && (
             <PlayVideoBox
               playerRef={playerRef}
               video={queue[queueIdx]}
-              onPause={onPause}
-              onPlay={onPlayAll}
-              onStop={onStop}
-              handleProgress={handlePlayAllProgress}
-              onReady={onReady} />
+              onStop={onStopAll}
+            />
           )}
         </Box>
 
@@ -442,7 +378,7 @@ function PlaylistManager({ playlistId }) {
           isPlaying={playing}
           onStop={() => {
             setQueueIdx(null);
-            setPlaying(false); 
+            setPlaying(false);
           }}
           onNext={() => {
             const nextIdx = queueIdx + 1;
@@ -487,8 +423,48 @@ function PlaylistManager({ playlistId }) {
 
 export default PlaylistManager;
 
-const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPause, onPlay, onStop, handleProgress, onReady, count }) {
+const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPause, onPlay, onStop, count }) {
   console.log("PlayVideoBox: ", video.id, count);
+  const [playing, setPlaying] = useState(false);
+  const [src, setSrc] = useState(null);
+  useEffect(() => {
+    setSrc(video.videourl);
+    setPlaying(true);
+  }, [video.id, video.videourl]);
+
+  const handlePlay = () => {
+    console.log("PlayVideoBox started");
+    const start = video.startTime
+    if (start) {
+      if (playerRef.current.currentTime < start) {
+        playerRef.current.currentTime = start;
+      }
+    }
+    onPlay?.();
+  }
+  const handlePause = () => {
+    console.log("PlayVideoBox paused");
+    onPause?.();
+  }
+  const handleEnd = () => {
+    console.log("PlayVideoBox ended");
+    onStop?.();
+  }
+  const handleTimeUpdate = () => {
+    // Khi đạt đến end (nếu có), dừng video
+    if (video.endTime && playerRef.current.currentTime >= video.endTime) {
+      console.log("PlayVideoBox reached endTime");
+      setPlaying(false);
+      setSrc(null); // reset src
+      setTimeout(() => {
+        onStop?.();
+      }, 100);
+    }
+  }
+  const handleReady = () => {
+    console.log("PlayVideoBox ready");
+  }
+
   return <Box sx={{
     m: 2,
     display: "flex",
@@ -498,20 +474,19 @@ const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPaus
     <Typography variant="h6">Now Playing</Typography>
     <ReactPlayer
       ref={playerRef}
-      src={video.videourl}
-      playing={true}
+      src={src}
+      playing={playing}
       start={video.startTime}
       end={video.endTime}
       controls
-      onPause={onPause}
-      onPlay={onPlay}
-      onEnded={onStop}
-      onProgress={handleProgress}
+      onPause={handlePause}
+      onPlay={handlePlay}
+      onEnded={handleEnd}
+      onTimeUpdate={handleTimeUpdate}
       // Bắt đầu từ start
       progressInterval={500} // kiểm tra mỗi 500ms
-
       // Để tự động seek đến start, có thể dùng hàm onReady
-      onReady={onReady}
+      onReady={handleReady}
       style={{ width: '100%', height: 'auto', aspectRatio: '16/9' }} />
   </Box>;
 })

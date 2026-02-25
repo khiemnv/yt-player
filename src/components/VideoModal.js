@@ -20,8 +20,8 @@ function VideoModal({
   onSave,
   base = {
     videourl: "",
-    startTime: "",
-    endTime: "",
+    startTime: 0,
+    endTime: 0,
     repeate: false,
   },
   mode = "add"

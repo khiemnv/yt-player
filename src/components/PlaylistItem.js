@@ -82,9 +82,6 @@ export function PlaylistItem({
     return url.length > maxLength ? url.substring(0, maxLength) + '...' : url;
   };
 
-  const formatSec = (s) => (`${s}s`);
-
-
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -307,3 +304,28 @@ export function PlaylistItem({
     </ListItem>
   );
 }
+
+const formatSec = (seconds) => {
+  if (seconds == null || isNaN(Number(seconds))) return "--";
+  const total = Math.max(0, Math.floor(Number(seconds)));
+
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+
+  // Nếu không có giờ và không có phút => chỉ hiện số giây
+  if (h === 0 && m === 0) return `${s}s`;
+
+  // Nếu có phút nhưng không có giờ => m:ss
+  if (h === 0) {
+    const ss = s.toString().padStart(2, "0");
+    return `${m}:${ss}`;
+  }
+
+  // Còn lại => hh:mm:ss
+  const hh = h.toString().padStart(2, "0");
+  const mm = m.toString().padStart(2, "0");
+  const ss = s.toString().padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
+};
+
