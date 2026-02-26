@@ -1,47 +1,44 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect, use } from "react";
+import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import {
   Box,
   Button,
-  Checkbox,
   Container,
   IconButton,
   List,
   Stack,
   Typography,
-  FormControlLabel,
   Tooltip,
   useMediaQuery,
   ToggleButton,
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   ListItem,
   Paper,
 } from "@mui/material";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
-import PlaylistPlayIcon from "@mui/icons-material/PlaylistPlay";
 import ReactPlayer from 'react-player'
 import { PlaylistItem } from "./PlaylistItem";
 import VideoModal from "./VideoModal";
 import SaveIcon from "@mui/icons-material/Save";
-import { getPlaylist, updatePlaylist } from "../services/search/videoApi";
+import { createPlaylist, updatePlaylist } from "../services/search/videoApi";
 import { useSelector } from "react-redux";
 import { addPlaylist, makeSelectPlaylistById } from "../features/video/videoSlice";
 import AddIcon from "@mui/icons-material/Add";
-
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RepeatIcon from "@mui/icons-material/Repeat";
 import SkipPreviousIcon from "@mui/icons-material/SkipPrevious";
 import SkipNextIcon from "@mui/icons-material/SkipNext";
 import StopIcon from "@mui/icons-material/Stop";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-
-import { useAppDispatch } from "../app/hooks";
-import { set } from "firebase/database";
-const ItemType = "playlistItem";
+import CloseIcon from '@mui/icons-material/Close';
+import Linkify from 'linkify-react';
+import { useAppDispatch, useAppSelector } from "../app/hooks";
+import { selectToken } from "../features/auth/authSlice";
+import { Navigate, useNavigate } from "react-router-dom";
 
 const isPlaylistChanged = (a = [], b = []) => {
   if (a.length !== b.length) return true;
@@ -72,6 +69,8 @@ function shuffleArray(array) {
   return arr;
 }
 function PlaylistManager({ playlistId }) {
+  const navigate = useNavigate();
+  const uid = useAppSelector(selectToken);
   const dispatch = useAppDispatch();
   const selectPlaylist = useMemo(makeSelectPlaylistById, []);
   const currentPlaylist = useSelector(state =>
@@ -178,13 +177,17 @@ function PlaylistManager({ playlistId }) {
     stopAllOrNext();
   }, [stopAllOrNext])
 
+  const extractVideos = (playlist) => {
+    return JSON.stringify(playlist.map(({ videourl, startTime, endTime, repeate }) => ({
+      videourl, startTime, endTime, repeate
+    })))
+  }
+
   const [addVideoOpen, setAddVideoOpen] = useState(false);
   const isMobile = useMediaQuery('(max-width:600px)');
   const handleSavePlaylist = async () => {
     const { result, error } = await updatePlaylist(playlistId, {
-      videos: JSON.stringify(playlist.map(({ videourl, startTime, endTime, repeate }) => ({
-        videourl, startTime, endTime, repeate
-      })))
+      videos: extractVideos(playlist)
     });
     if (result) {
       console.log("Playlist saved successfully!");
@@ -192,6 +195,21 @@ function PlaylistManager({ playlistId }) {
       console.log("Failed to save playlist: " + error);
     }
   };
+
+  const handleClonePlaylist = async () => {
+    const clone = {
+      ...currentPlaylist,
+      videos: extractVideos(playlist)
+    };
+    delete clone.id;
+    const { result } = await createPlaylist(uid, clone);
+    if (result) {
+      dispatch(addPlaylist({ playlist: result }));
+      navigate(`/playlists/${result.id}`);
+    } else {
+      console.log("Clone playlist error!")
+    }
+  }
 
   const handleEditVideoSave = (videoInfo) => {
     // Cập nhật playlist
@@ -220,29 +238,46 @@ function PlaylistManager({ playlistId }) {
         sx={{
           p: 2,
           display: "flex",
-          alignItems: "center"
+          alignItems: "center",
         }}
       >
 
+        {/* Save Playlist| Clone */}
+        {
+          (currentPlaylist.owner !== uid) ? <Tooltip
+            title={"Clone Playlist"}
+          >
+            <span>
+              <IconButton
+                color="primary"
+                onClick={handleClonePlaylist}
+                sx={{
+                  border: "1px solid",
+                  borderColor: "primary.main"
+                }}
+              >
+                <ContentCopyIcon  />
+              </IconButton>
+            </span>
+          </Tooltip> : <Tooltip
+            title={isDirty ? "Save Playlist" : "No changes"}
+          >
+            <span>
+              <IconButton
+                color="primary"
+                onClick={handleSavePlaylist}
+                disabled={!isDirty}
+                sx={{
+                  border: "1px solid",
+                  borderColor: isDirty ? "primary.main" : "divider"
+                }}
+              >
+                <SaveIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        }
 
-        {/* Save Playlist */}
-        <Tooltip
-          title={isDirty ? "Save Playlist" : "No changes"}
-        >
-          <span>
-            <IconButton
-              color="primary"
-              onClick={handleSavePlaylist}
-              disabled={!isDirty}
-              sx={{
-                border: "1px solid",
-                borderColor: isDirty ? "primary.main" : "divider"
-              }}
-            >
-              <SaveIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
         <PlaylistTitle currentPlaylist={currentPlaylist} />
       </Box>
 
@@ -260,7 +295,8 @@ function PlaylistManager({ playlistId }) {
           minHeight: "300px",
           maxWidth: isMobile ?
             "100vw" : "100vw",
-          justifyContent: isMobile ? "center" : "flex-start"
+          justifyContent: isMobile ? "center" : "flex-start",
+          alignItems: isMobile ? "center" : "flex-start"
         }}
       >
 
@@ -272,8 +308,6 @@ function PlaylistManager({ playlistId }) {
           flexDirection: "column",
           overflow: "auto"
         }}>
-
-
 
           <Box sx={{
             display: "flex",
@@ -427,9 +461,11 @@ const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPaus
   console.log("PlayVideoBox: ", video.id, count);
   const [playing, setPlaying] = useState(false);
   const [src, setSrc] = useState(null);
+  const [muted, setMuted] = useState(false);
   useEffect(() => {
     setSrc(video.videourl);
     setPlaying(true);
+    setMuted(true);
   }, [video.id, video.videourl]);
 
   const handlePlay = () => {
@@ -440,6 +476,7 @@ const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPaus
         playerRef.current.currentTime = start;
       }
     }
+    setMuted(false);
     onPlay?.();
   }
   const handlePause = () => {
@@ -476,6 +513,8 @@ const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPaus
       ref={playerRef}
       src={src}
       playing={playing}
+      playsInline={true}
+      muted={muted}
       start={video.startTime}
       end={video.endTime}
       controls
@@ -487,10 +526,10 @@ const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPaus
       progressInterval={500} // kiểm tra mỗi 500ms
       // Để tự động seek đến start, có thể dùng hàm onReady
       onReady={handleReady}
-      style={{ width: '100%', height: 'auto', aspectRatio: '16/9' }} />
+      style={{ width: '100%', height: 'auto', aspectRatio: '16/9' }}
+    />
   </Box>;
 })
-
 function PlaylistTitle({ currentPlaylist }) {
   const [infoOpen, setInfoOpen] = useState(false);
 
@@ -525,25 +564,55 @@ function PlaylistTitle({ currentPlaylist }) {
     </Typography>
   </Box>
     <Dialog
-      open={infoOpen}
-      onClose={() => setInfoOpen(false)}
-      maxWidth="sm"
-      fullWidth
+  open={infoOpen}
+  onClose={() => setInfoOpen(false)}
+  maxWidth="sm"
+  fullWidth
+>
+  {/* Close button on top right */}
+  <Box
+    sx={{
+      position: 'absolute',
+      right: 8,
+      top: 8,
+      zIndex: 1,
+    }}
+  >
+    <IconButton
+      aria-label="close"
+      onClick={() => setInfoOpen(false)}
+      size="large"
     >
-      {/* <DialogTitle>Playlist Note</DialogTitle> */}
+      <CloseIcon />
+    </IconButton>
+  </Box>
 
-      <DialogContent dividers>
-        <Typography variant="body1" sx={{ whiteSpace: "pre-line" }}>
-          {currentPlaylist?.note || "No note available."}
-        </Typography>
-      </DialogContent>
+  {/* Nếu muốn có tiêu đề, bạn có thể thêm DialogTitle ở đây */}
+  {/* <DialogTitle>Playlist Note</DialogTitle> */}
 
-      <DialogActions>
-        <Button onClick={() => setInfoOpen(false)}>
-          Close
-        </Button>
-      </DialogActions>
-    </Dialog>
+  <DialogContent dividers>
+    <Typography
+      variant="body1"
+      sx={{ whiteSpace: "pre-line" }}
+      component="div"
+    >
+      <Linkify
+        options={{
+          target: '_blank',
+          rel: 'noopener noreferrer',
+        }}
+      >
+        {currentPlaylist?.note || "No note available."}
+      </Linkify>
+    </Typography>
+  </DialogContent>
+{/* 
+  <DialogActions>
+    <Button onClick={() => setInfoOpen(false)}>
+      Close
+    </Button>
+  </DialogActions> */}
+</Dialog>
   </>;
 }
 

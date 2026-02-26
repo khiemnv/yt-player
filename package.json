@@ -17,6 +17,8 @@
     "diff-match-patch": "^1.0.5",
     "firebase": "^12.2.1",
     "latinize": "^2.0.0",
+    "linkify-react": "^4.3.2",
+    "linkifyjs": "^4.3.2",
     "react": "^19.2.4",
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
@@ -28,8 +30,8 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "env-cmd -f .env react-scripts start",
-    "build": "react-scripts build",
+    "build": "env-cmd -f .env react-scripts build",
+    "dev": "env-cmd -f .env.dev react-scripts start",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
