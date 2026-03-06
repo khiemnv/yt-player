@@ -17,6 +17,8 @@ import {
   DialogActions,
   ListItem,
   Paper,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import ShuffleIcon from "@mui/icons-material/Shuffle";
 import ReactPlayer from 'react-player'
@@ -25,7 +27,7 @@ import VideoModal from "./VideoModal";
 import SaveIcon from "@mui/icons-material/Save";
 import { createPlaylist, updatePlaylist } from "../services/search/videoApi";
 import { useSelector } from "react-redux";
-import { addPlaylist, makeSelectPlaylistById } from "../features/video/videoSlice";
+import { addPlaylist, editPlaylist, makeSelectPlaylistById } from "../features/video/videoSlice";
 import AddIcon from "@mui/icons-material/Add";
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RepeatIcon from "@mui/icons-material/Repeat";
@@ -41,6 +43,7 @@ import { selectToken } from "../features/auth/authSlice";
 import { Navigate, useNavigate } from "react-router-dom";
 
 const isPlaylistChanged = (a = [], b = []) => {
+  // console.log("isPlaylistChanged")
   if (a.length !== b.length) return true;
 
   for (let i = 0; i < a.length; i++) {
@@ -94,6 +97,8 @@ function PlaylistManager({ playlistId }) {
   const [shuffle, setShuffle] = useState(false);
   const [queue, setQueue] = useState([]);
   const [queueIdx, setQueueIdx] = useState(false);
+
+  const [sb, setSb] = useState(); // {error, success, waring}
 
   const playerRef = useRef(null);
   const timeUpdateRef = useRef(null);
@@ -186,13 +191,15 @@ function PlaylistManager({ playlistId }) {
   const [addVideoOpen, setAddVideoOpen] = useState(false);
   const isMobile = useMediaQuery('(max-width:600px)');
   const handleSavePlaylist = async () => {
-    const { result, error } = await updatePlaylist(playlistId, {
+    const changes = {
       videos: extractVideos(playlist)
-    });
+    }
+    const { result, error } = await updatePlaylist(playlistId, changes);
     if (result) {
-      console.log("Playlist saved successfully!");
+      dispatch(editPlaylist({ id:playlistId, changes }));
+      setSb({success: "Playlist saved successfully!"});
     } else {
-      console.log("Failed to save playlist: " + error);
+      setSb({error: `Failed to save playlist: ${error}`});
     }
   };
 
@@ -226,13 +233,14 @@ function PlaylistManager({ playlistId }) {
     [playlist, originalPlaylist]
   );
 
-
   return (
-    <Box sx={{
-      display: "flex",
-      width: "100%",
-      flexDirection: "column"
-    }}>
+    <Box
+      sx={{
+        display: "flex",
+        width: "100%",
+        flexDirection: "column",
+      }}
+    >
       {/* title */}
       <Box
         sx={{
@@ -241,27 +249,24 @@ function PlaylistManager({ playlistId }) {
           alignItems: "center",
         }}
       >
-
         {/* Save Playlist| Clone */}
-        {
-          (currentPlaylist.owner !== uid) ? <Tooltip
-            title={"Clone Playlist"}
-          >
+        {currentPlaylist.owner !== uid ? (
+          <Tooltip title={"Clone Playlist"}>
             <span>
               <IconButton
                 color="primary"
                 onClick={handleClonePlaylist}
                 sx={{
                   border: "1px solid",
-                  borderColor: "primary.main"
+                  borderColor: "primary.main",
                 }}
               >
-                <ContentCopyIcon  />
+                <ContentCopyIcon />
               </IconButton>
             </span>
-          </Tooltip> : <Tooltip
-            title={isDirty ? "Save Playlist" : "No changes"}
-          >
+          </Tooltip>
+        ) : (
+          <Tooltip title={isDirty ? "Save Playlist" : "No changes"}>
             <span>
               <IconButton
                 color="primary"
@@ -269,14 +274,14 @@ function PlaylistManager({ playlistId }) {
                 disabled={!isDirty}
                 sx={{
                   border: "1px solid",
-                  borderColor: isDirty ? "primary.main" : "divider"
+                  borderColor: isDirty ? "primary.main" : "divider",
                 }}
               >
                 <SaveIcon />
               </IconButton>
             </span>
           </Tooltip>
-        }
+        )}
 
         <PlaylistTitle currentPlaylist={currentPlaylist} />
       </Box>
@@ -293,34 +298,37 @@ function PlaylistManager({ playlistId }) {
         sx={{
           minWidth: "300px",
           minHeight: "300px",
-          maxWidth: isMobile ?
-            "100vw" : "100vw",
+          maxWidth: isMobile ? "100vw" : "100vw",
           justifyContent: isMobile ? "center" : "flex-start",
-          alignItems: isMobile ? "center" : "flex-start"
+          alignItems: isMobile ? "center" : "flex-start",
         }}
       >
-
         {/* playlist control bar */}
-        <Box sx={{
-          maxWidth: isMobile ? "fit-content" : "500px",
-          flexGrow: isMobile ? 10 : 0,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "auto"
-        }}>
-
-          <Box sx={{
+        <Box
+          sx={{
+            maxWidth: isMobile ? "100%" : "500px",
+            minWidth: "300px",
+            flexGrow: isMobile ? 10 : 0,
             display: "flex",
-            flexGrow: 1,
-            minHeight: "200px",
-            overflowY: "scroll",
-            p: 0,
-          }}>
+            flexDirection: "column",
+            overflow: "auto",
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              flexGrow: 1,
+              minHeight: "200px",
+              overflowY: "scroll",
+              p: 0,
+            }}
+          >
             <DndProvider backend={HTML5Backend}>
-              <Container sx={{
-                p: 0,
-              }}>
-
+              <Container
+                sx={{
+                  p: 0,
+                }}
+              >
                 {/* videos list với drag-and-drop, edit, delete, play */}
                 <List>
                   {playlist.map((video, idx) => (
@@ -333,7 +341,10 @@ function PlaylistManager({ playlistId }) {
                       onDelete={handleDelete}
                       onPlay={() => handlePlay(video)}
                       onStop={handleStop}
-                      isPlaying={video.id === playingVideo?.id || video.id === queue[queueIdx]?.id}
+                      isPlaying={
+                        video.id === playingVideo?.id ||
+                        video.id === queue[queueIdx]?.id
+                      }
                     />
                   ))}
 
@@ -349,7 +360,7 @@ function PlaylistManager({ playlistId }) {
                       gap: 2,
                       border: "1px solid #e0e0e0",
                       backgroundColor: "background.paper",
-                      transition: "all 0.2s ease"
+                      transition: "all 0.2s ease",
                     }}
                   >
                     {/* Add Video */}
@@ -359,7 +370,7 @@ function PlaylistManager({ playlistId }) {
                         onClick={() => setAddVideoOpen(true)}
                         sx={{
                           border: "1px solid",
-                          borderColor: "divider"
+                          borderColor: "divider",
                         }}
                       >
                         <AddIcon />
@@ -367,27 +378,28 @@ function PlaylistManager({ playlistId }) {
                     </Tooltip>
                   </ListItem>
                 </List>
-
               </Container>
             </DndProvider>
           </Box>
-
-
         </Box>
 
         {/* play area  */}
-        <Box sx={{
-          display: "flex",
-          flexGrow: 10,
-          alignItems: "center",
-          justifyContent: "center"
-        }}>
+        <Box
+          sx={{
+            display: "flex",
+            flexGrow: 10,
+            alignItems: "center",
+            justifyContent: "center",
+            p: 2,
+          }}
+        >
           {playingVideo !== null && (
             <PlayVideoBox
               playerRef={playerRef}
               video={playingVideo}
               onStop={onStopOne}
-              count={playingVideo.count || 0} />
+              count={playingVideo.count || 0}
+            />
           )}
           {queueIdx !== null && queue[queueIdx] && (
             <PlayVideoBox
@@ -397,13 +409,13 @@ function PlaylistManager({ playlistId }) {
             />
           )}
         </Box>
-
       </Box>
 
       {/* footter */}
       {/* playall, shuffle, repeat all */}
       <Box sx={{ p: 2 }}>
-        <PlayMode startPlayAll={startPlayAll}
+        <PlayMode
+          startPlayAll={startPlayAll}
           playlist={playlist}
           repeatAll={repeatAll}
           setRepeatAll={setRepeatAll}
@@ -434,19 +446,44 @@ function PlaylistManager({ playlistId }) {
       </Box>
 
       {/* form thêm video */}
-      {addVideoOpen && <VideoModal
-        open={addVideoOpen}
-        onClose={() => setAddVideoOpen(false)}
-        onSave={handleAddVideoSave}
-      />}
+      {addVideoOpen && (
+        <VideoModal
+          open={addVideoOpen}
+          onClose={() => setAddVideoOpen(false)}
+          onSave={handleAddVideoSave}
+        />
+      )}
 
-      {(editingIdx !== null) && <VideoModal
-        open={true}
-        onClose={() => setEditingIdx(null)}
-        onSave={handleEditVideoSave}
-        base={playlist[editingIdx]}
-      />}
+      {editingIdx !== null && (
+        <VideoModal
+          open={true}
+          onClose={() => setEditingIdx(null)}
+          onSave={handleEditVideoSave}
+          base={playlist[editingIdx]}
+        />
+      )}
 
+      {/* snackbar */}
+      <Snackbar
+        open={sb}
+        autoHideDuration={1600}
+        onClose={() => setSb()}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        {sb?.error ? (
+          <Alert severity="error" variant="filled" onClose={() => setSb()}>
+            {sb?.error}
+          </Alert>
+        ) : sb?.warning ? (
+          <Alert severity="warning" variant="filled" onClose={() => setSb()}>
+            {sb?.warning}
+          </Alert>
+        ) : (
+          <Alert severity="success" variant="filled" onClose={() => setSb()}>
+            {sb?.success}
+          </Alert>
+        )}
+      </Snackbar>
     </Box>
   );
 
@@ -457,7 +494,7 @@ function PlaylistManager({ playlistId }) {
 
 export default PlaylistManager;
 
-const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPause, onPlay, onStop, count }) {
+export const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPause, onPlay, onStop, count }) {
   console.log("PlayVideoBox: ", video.id, count);
   const [playing, setPlaying] = useState(false);
   const [src, setSrc] = useState(null);
@@ -503,12 +540,12 @@ const PlayVideoBox = React.memo(function PlayVideoBox({ playerRef, video, onPaus
   }
 
   return <Box sx={{
-    m: 2,
+    // m: 2,
     display: "flex",
     flexDirection: "column",
     width: "100%"
   }}>
-    <Typography variant="h6">Now Playing</Typography>
+    {/* <Typography variant="h6">Now Playing</Typography> */}
     <ReactPlayer
       ref={playerRef}
       src={src}

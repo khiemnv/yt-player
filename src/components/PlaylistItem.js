@@ -132,7 +132,7 @@ export function PlaylistItem({
         border: isPlaying ? "2px solid #2e7d32" : "1px solid #e0e0e0",
         backgroundColor: isPlaying ? "#e8f5e9" : "background.paper",
         transition: "all 0.2s ease",
-        minWidth: "300px"
+        maxWidth: "100%"
       }}
     >
       {/* Drag handle */}
@@ -161,7 +161,9 @@ export function PlaylistItem({
       </Box> */}
 
       {/* Info */}
-      <Stack direction="column" spacing={0.5} sx={{ flexGrow: 1, minWidth: 0 }}>
+      <Stack direction="column" spacing={0.5} sx={{ flexGrow: 1, 
+        minWidth: 0,
+        maxWidth:"100%" }}>
 
         <Tooltip title="Click để copy URL" placement="top" arrow>
           <Typography
@@ -178,6 +180,7 @@ export function PlaylistItem({
               cursor: "pointer",              // <- để người dùng thấy có thể click
               userSelect: "none",             // tránh bôi đen
               "&:hover": { textDecoration: "underline" }, // feedback thị giác
+              // maxWidth: "250px"
             }}
           >
             {/* {video.title ? video.title : trimUrl(video.videourl)} */}

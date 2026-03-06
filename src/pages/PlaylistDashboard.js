@@ -108,9 +108,16 @@ export default function PlaylistDashboard() {
       await updatePlaylist(editing.id, changes);
       dispatch(editPlaylist({ id: editing.id, changes }));
     } else {
-      const {result} = await createPlaylist(uid, form);
-      // await addDoc(collection(db, "users", uid, "playlists"), form);
-      dispatch(addPlaylist({ playlist: result }));
+      try {
+        const {result, error} = await createPlaylist(uid, form);
+        if (error) {
+          throw new Error("Failed to create playlist: " + error);
+        }
+        // await addDoc(collection(db, "users", uid, "playlists"), form);
+        dispatch(addPlaylist({ playlist: result }));
+      } catch (ex) {
+        console.error("Failed to create playlist:", ex.message);
+      }
     }
 
     setOpen(false);
