@@ -184,7 +184,7 @@ export function PlaylistItem({
             }}
           >
             {/* {video.title ? video.title : trimUrl(video.videourl)} */}
-            {video.videourl}
+            {video.title || getYouTubeIdByURL(video.videourl) || trimUrl(video.videourl)}
           </Typography>
         </Tooltip>
 
@@ -332,3 +332,21 @@ const formatSec = (seconds) => {
   return `${hh}:${mm}:${ss}`;
 };
 
+export function getYouTubeIdByURL(url) {
+  try {
+    const u = new URL(url);
+
+    if (u.hostname === "youtu.be") {
+      return u.pathname.slice(1);
+    }
+
+    if (u.hostname.includes("youtube.com")) {
+      return (
+        u.searchParams.get("v") ||
+        u.pathname.split("/").pop()
+      );
+    }
+  } catch {
+    return null;
+  }
+}

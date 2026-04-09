@@ -75,5 +75,10 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/t
 
 ```
 firebase emulators:start --import fd_data --export-on-exit
+```
+
+## deploy
+
+```
 firebase deploy --only hosting
 ```

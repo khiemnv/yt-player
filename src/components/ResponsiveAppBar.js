@@ -9,6 +9,7 @@ import {
   Divider,
   IconButton,
   Input,
+  InputAdornment,
   Menu,
   MenuItem,
   Modal,
@@ -36,17 +37,18 @@ const pages = [
   { text: "Settings", icon: <SettingsIcon />, url: "/setting",roles: ["admin", "user", "guest"] },
 ];
 
+
 function ChatInput({ onChange }) {
   const [message, setMessage] = useState("");
 
   const handleSend = () => {
     if (!message.trim()) return;
-    onChange(message);
+    onChange(message.trim());
     setMessage("");
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter") {
       e.preventDefault();
       handleSend();
     }
@@ -57,43 +59,40 @@ function ChatInput({ onChange }) {
       elevation={3}
       sx={{
         p: 0.5,
-        pl: 1,
-        pr: 1,
+        px: 2,
         borderRadius: 4,
         display: "flex",
-        alignItems: "flex-end",
-        gap: 1,
+        alignItems: "center",
       }}
     >
       <TextField
         fullWidth
-        // multiline
-        // maxRows={6}
-        placeholder="Url..."
+        placeholder="Paste YouTube URL…"
         variant="standard"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         onKeyDown={handleKeyDown}
-        InputProps={{
-          disableUnderline: true,
-        }}
-        sx={{
-          "& textarea": {
-            resize: "none",
+        slotProps={{
+          input: {
+            disableUnderline: true,
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  color="primary"
+                  onClick={handleSend}
+                  disabled={!message.trim()}
+                >
+                  <SearchIcon />
+                </IconButton>
+              </InputAdornment>
+            ),
           },
         }}
       />
-
-      {/* <IconButton
-        color="primary"
-        onClick={handleSend}
-        disabled={!message.trim()}
-      >
-        <SendIcon />
-      </IconButton> */}
     </Paper>
   );
 }
+
 
 export function ResponsiveAppBar() {
   

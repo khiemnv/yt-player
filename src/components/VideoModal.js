@@ -12,7 +12,7 @@ import {
 import { LocalizationProvider, TimePicker } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs from "dayjs";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 function VideoModal({
   open,
@@ -28,13 +28,13 @@ function VideoModal({
 }) {
   const [editForm, setEditForm] = useState(base);
 
-  const handleChange = (e) => {
+  const handleChange = useCallback((e) => {
     const { name, value, type, checked } = e.target;
     setEditForm((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
-  };
+  }, []);
 
   const handleSubmit = () => {
     if (!editForm.videourl) return;
@@ -84,64 +84,104 @@ const dayjsToSeconds = (value) => {
     value.second()
   );
 };
+
 function VideoForm({ videoInfo, handleChange }) {
-  return <Stack spacing={2} sx={{ mt: 1 }}>
-    <TextField
-      label="Video URL"
-      name="videourl"
-      value={videoInfo.videourl}
-      onChange={handleChange}
-      required
-      fullWidth />
+  const lastUrlRef = useRef("");
 
-    <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+  // ✅ auto-fill title from YouTube link
+  useEffect(() => {
+    const url = videoInfo.videourl?.trim();
+    if (!url || url === lastUrlRef.current) return;
 
-        <TimePicker
-          label="Start Time"
-          views={["hours", "minutes", "seconds"]}
-          format="HH:mm:ss"
-          value={secondsToDayjs(videoInfo.startTime)}
-          onChange={(newValue) => {
-            const target = {
-              name: "startTime",
-              value: dayjsToSeconds(newValue),  
-              type: "text"
-            };
-            handleChange({target});
-          }
-          }
-          slotProps={{ textField: { fullWidth: true } }}
-        />
+    lastUrlRef.current = url;
 
-        <TimePicker
-          label="End Time"
-          views={["hours", "minutes", "seconds"]}
-          format="HH:mm:ss"
-          value={secondsToDayjs(videoInfo.endTime)}
-          onChange={(newValue) => {
-            const target = {
-              name: "endTime",
-              value: dayjsToSeconds(newValue),
-              type: "text"
-            };
-            handleChange({target});
-          }
-          }
-          slotProps={{ textField: { fullWidth: true } }}
-        />
+    fetchYouTubeTitle(url).then((title) => {
+      if (title && !videoInfo.title) {
+        handleChange({
+          target: {
+            name: "title",
+            value: title,
+            type: "text",
+          },
+        });
+      }
+    });
+  }, [handleChange, videoInfo.title, videoInfo.videourl]);
 
-      </Stack>
-    </LocalizationProvider>
+  return (
+    <Stack spacing={2} sx={{ mt: 1 }}>
+      {/* ✅ Video URL */}
+      <TextField
+        label="Video URL"
+        name="videourl"
+        value={videoInfo.videourl}
+        onChange={handleChange}
+        required
+        fullWidth
+      />
 
-    <FormControlLabel
-      control={<Checkbox
-        checked={videoInfo.repeate}
-        name="repeate"
-        onChange={handleChange} />}
-      label="Repeat" />
-  </Stack>;
+      {/* ✅ Auto-filled title (editable) */}
+      <TextField
+        label="Title"
+        name="title"
+        value={videoInfo.title || ""}
+        onChange={handleChange}
+        fullWidth
+        helperText="Auto-filled from YouTube link, editable"
+      />
+
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+          <TimePicker
+            label="Start Time"
+            views={["hours", "minutes", "seconds"]}
+            format="HH:mm:ss"
+            value={secondsToDayjs(videoInfo.startTime)}
+            onChange={(newValue) =>
+              handleChange({
+                target: {
+                  name: "startTime",
+                  value: dayjsToSeconds(newValue),
+                  type: "text",
+                },
+              })
+            }
+            slotProps={{ textField: { fullWidth: true } }}
+          />
+
+          <TimePicker
+            label="End Time"
+            views={["hours", "minutes", "seconds"]}
+            format="HH:mm:ss"
+            value={secondsToDayjs(videoInfo.endTime)}
+            onChange={(newValue) =>
+              handleChange({
+                target: {
+                  name: "endTime",
+                  value: dayjsToSeconds(newValue),
+                  type: "text",
+                },
+              })
+            }
+            slotProps={{ textField: { fullWidth: true } }}
+          />
+        </Stack>
+      </LocalizationProvider>
+
+      <FormControlLabel
+        control={
+          <Checkbox
+            checked={videoInfo.repeate}
+            name="repeate"
+            onChange={handleChange}
+          />
+        }
+        label="Repeat"
+      />
+    </Stack>
+  );
 }
+
 
 
 function editModal(editModalOpen, setEditModalOpen, editForm, setEditForm, setPlaylist, editingIdx, setEditingIdx, onSave) {
@@ -201,4 +241,20 @@ function editModal(editModalOpen, setEditModalOpen, editForm, setEditForm, setPl
       </Button>
     </DialogActions>
   </Dialog>;
+}
+
+
+async function fetchYouTubeTitle(url) {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
+    );
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    return data.title || null;
+  } catch {
+    return null;
+  }
 }

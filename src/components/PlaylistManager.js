@@ -52,6 +52,7 @@ const isPlaylistChanged = (a = [], b = []) => {
 
     if (
       itemA.videourl !== itemB.videourl ||
+      itemA.title !== itemB.title ||
       Number(itemA.startTime) !== Number(itemB.startTime) ||
       Number(itemA.endTime) !== Number(itemB.endTime) ||
       itemA.repeate !== itemB.repeate
@@ -183,8 +184,8 @@ function PlaylistManager({ playlistId }) {
   }, [stopAllOrNext])
 
   const extractVideos = (playlist) => {
-    return JSON.stringify(playlist.map(({ videourl, startTime, endTime, repeate }) => ({
-      videourl, startTime, endTime, repeate
+    return JSON.stringify(playlist.map(({ videourl, title, startTime, endTime, repeate }) => ({
+      videourl, title, startTime, endTime, repeate
     })))
   }
 

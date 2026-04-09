@@ -18,20 +18,33 @@ import {
   Select,
   InputLabel,
   FormControl,
-  Stack
+  Stack,
+  Collapse,
+  CardActionArea,
+  CardHeader,
 } from "@mui/material";
 import { Add, MoreVert } from "@mui/icons-material";
 
-import { createPlaylist, getAllPlaylists, removePlaylist, updatePlaylist } from "../services/search/videoApi";
+import {
+  createPlaylist,
+  getAllPlaylists,
+  removePlaylist,
+  updatePlaylist,
+} from "../services/search/videoApi";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { selectToken } from "../features/auth/authSlice";
-import { addPlaylist, deletePlaylist, editPlaylist, selectAllPlaylists, setPlaylists } from "../features/video/videoSlice";
+import {
+  addPlaylist,
+  deletePlaylist,
+  editPlaylist,
+  selectAllPlaylists,
+  setPlaylists,
+} from "../features/video/videoSlice";
 import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 // import { Timestamp } from "firebase/firestore";
-
 
 export default function PlaylistDashboard() {
   const playlists = useAppSelector(selectAllPlaylists);
@@ -46,7 +59,7 @@ export default function PlaylistDashboard() {
   const [form, setForm] = useState({
     title: "",
     dateCreated: Date.now(),
-    note: ""
+    note: "",
   });
 
   const uid = useAppSelector(selectToken);
@@ -59,23 +72,21 @@ export default function PlaylistDashboard() {
     const load = async () => {
       if (!uid) return;
 
-      const {result} = await getAllPlaylists(uid);
+      const { result } = await getAllPlaylists(uid);
       console.log("Fetched playlists:", result);
       if (result) {
-        dispatch(setPlaylists({allPlaylists: result}));
+        dispatch(setPlaylists({ allPlaylists: result }));
       } else {
         console.error("Failed to fetch playlists for user ID:", uid);
       }
-    }
+    };
     load();
   }, [dispatch, uid]);
 
   // ? Search + Sort
   const filtered = useMemo(() => {
     return playlists
-      .filter(p =>
-        p.title.toLowerCase().includes(search.toLowerCase())
-      )
+      .filter((p) => p.title.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => {
         if (sortField === "title") {
           return a.title.localeCompare(b.title);
@@ -94,7 +105,7 @@ export default function PlaylistDashboard() {
 
     if (editing) {
       // await updateDoc(doc(db, "users", uid, "playlists", editing), form);
-      const changes = { };
+      const changes = {};
       if (editing.title !== form.title) {
         changes.title = form.title;
       }
@@ -109,7 +120,7 @@ export default function PlaylistDashboard() {
       dispatch(editPlaylist({ id: editing.id, changes }));
     } else {
       try {
-        const {result, error} = await createPlaylist(uid, form);
+        const { result, error } = await createPlaylist(uid, form);
         if (error) {
           throw new Error("Failed to create playlist: " + error);
         }
@@ -126,7 +137,7 @@ export default function PlaylistDashboard() {
 
   const handleDelete = async () => {
     // await deleteDoc(doc(db, "users", uid, "playlists", selectedId));
-    const {result} = await removePlaylist(selectedId);
+    const { result } = await removePlaylist(selectedId);
     if (result) {
       dispatch(deletePlaylist({ playlistId: selectedId }));
     } else {
@@ -137,18 +148,17 @@ export default function PlaylistDashboard() {
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1200, mx: "auto" }}>
-      
       {/* Header */}
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mb: 3 }}>
         <Typography variant="h5" sx={{ flexGrow: 1 }}>
-         {"🎵 My Playlists"}
+          {"🎵 My Playlists"}
         </Typography>
 
         <TextField
           size="small"
           placeholder="Search..."
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
         />
 
         <FormControl size="small">
@@ -156,7 +166,7 @@ export default function PlaylistDashboard() {
           <Select
             value={sortField}
             label="Sort"
-            onChange={e => setSortField(e.target.value)}
+            onChange={(e) => setSortField(e.target.value)}
           >
             <MenuItem value="dateCreated">Date</MenuItem>
             <MenuItem value="name">Name</MenuItem>
@@ -178,39 +188,46 @@ export default function PlaylistDashboard() {
 
       {/* Playlist Cards */}
       <Stack spacing={2}>
-  {filtered.map(p => (
-    <Card
-      key={p.id}
-      sx={{
-        position: "relative",
-        cursor: "pointer",
-        "&:hover": { boxShadow: 6 }
-      }}
-      onClick={() => navigate(`/playlists/${p.id}`)}
-    >
-      <IconButton
-        sx={{ position: "absolute", right: 8, top: 8 }}
-        onClick={(e) => {
-          e.stopPropagation(); // 🔥 QUAN TRỌNG
-          setMenuAnchor(e.currentTarget);
-          setSelectedId(p.id);
-        }}
-      >
-        <MoreVert />
-      </IconButton>
+        {filtered.map((p) => (
+          <Card
+            key={p.id}
+            sx={{
+              position: "relative",
+              // cursor: "pointer",
+              // "&:hover": { boxShadow: 6 },
+            }}
+          >
+            <CardHeader
+              title={
+                <Typography
+                  variant="h6"
+                  sx={{
+                    cursor: "pointer",
+                    // "&:hover": { textDecoration: "underline" },
+                  }}
+                  onClick={() => navigate(`/playlists/${p.id}`)}
+                >
+                  {p.title}
+                </Typography>
+              }
+              subheader={formatDate(p.dateCreated)}
+              action={
+                <IconButton
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuAnchor(e.currentTarget);
+                    setSelectedId(p.id);
+                  }}
+                >
+                  <MoreVert />
+                </IconButton>
+              }
+            />
 
-      <CardContent>
-        <Typography variant="h6">{p.title}</Typography>
-        <Typography variant="body2" color="text.secondary">
-          {formatDate(p.dateCreated)}
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 1 }}>
-          {p.note}
-        </Typography>
-      </CardContent>
-    </Card>
-  ))}
-</Stack>
+            <NoteCard p={p} navigate={navigate}></NoteCard>
+          </Card>
+        ))}
+      </Stack>
 
       {/* Action Menu */}
       <Menu
@@ -220,7 +237,7 @@ export default function PlaylistDashboard() {
       >
         <MenuItem
           onClick={() => {
-            const p = playlists.find(x => x.id === selectedId);
+            const p = playlists.find((x) => x.id === selectedId);
             setForm(p);
             setEditing(p);
             setOpen(true);
@@ -229,9 +246,7 @@ export default function PlaylistDashboard() {
         >
           Edit
         </MenuItem>
-        <MenuItem onClick={handleDelete}>
-          Delete
-        </MenuItem>
+        <MenuItem onClick={handleDelete}>Delete</MenuItem>
       </Menu>
 
       {/* Dialog */}
@@ -242,28 +257,27 @@ export default function PlaylistDashboard() {
             fullWidth
             label="Title"
             value={form.title}
-            onChange={e => setForm({ ...form, title: e.target.value })}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
             sx={{ mb: 2 }}
           />
           <LocalizationProvider dateAdapter={AdapterDayjs}>
-            
-        <DatePicker
-            label="Date Created"
-            format="DD/MM/YYYY"
-            value={form.dateCreated ? dayjs(form.dateCreated) : null}
-            onChange={(newValue) =>
-              setForm({
-                ...form,
-                dateCreated: newValue ? newValue.toISOString() : null
-              })
-            }
-            slotProps={{
-              textField: {
-                fullWidth: true,
-                sx: { mb: 2 }
+            <DatePicker
+              label="Date Created"
+              format="DD/MM/YYYY"
+              value={form.dateCreated ? dayjs(form.dateCreated) : null}
+              onChange={(newValue) =>
+                setForm({
+                  ...form,
+                  dateCreated: newValue ? newValue.toISOString() : null,
+                })
               }
-            }}
-          />
+              slotProps={{
+                textField: {
+                  fullWidth: true,
+                  sx: { mb: 2 },
+                },
+              }}
+            />
           </LocalizationProvider>
           <TextField
             fullWidth
@@ -271,7 +285,7 @@ export default function PlaylistDashboard() {
             rows={5}
             label="Note"
             value={form.note}
-            onChange={e => setForm({ ...form, note: e.target.value })}
+            onChange={(e) => setForm({ ...form, note: e.target.value })}
           />
         </DialogContent>
         <DialogActions>
@@ -288,7 +302,7 @@ export default function PlaylistDashboard() {
 const formatDate = (timestamp) => {
   if (!timestamp) return "";
 
-  const date =  new Date(timestamp);
+  const date = new Date(timestamp);
   return date.toLocaleDateString("en-GB");
 
   const day = String(date.getDate()).padStart(2, "0");
@@ -300,8 +314,43 @@ const formatDate = (timestamp) => {
 const toInputDate = (timestamp) => {
   if (!timestamp) return "";
 
-  const date =  new Date(timestamp);
+  const date = new Date(timestamp);
   return date.toLocaleDateString("en-GB");
 
   return date.toISOString().split("T")[0];
 };
+
+function NoteCard({ p, navigate }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = p.note?.length > 120;
+  const COLLAPSED_HEIGHT = 60;
+  return (
+    <CardContent>
+
+      {/* ✅ NOTE (NO NAVIGATION) */}
+      <Collapse in={expanded} collapsedSize={COLLAPSED_HEIGHT}>
+        <Typography
+          variant="body2"
+          sx={{
+            mt: 1,
+            whiteSpace: "pre-line",
+            wordBreak: "break-word",
+          }}
+        >
+          {p.note}
+        </Typography>
+      </Collapse>
+
+      {/* ✅ SHOW MORE / LESS */}
+      {isLong && (
+        <Button
+          size="small"
+          sx={{ mt: 0.5, px: 0, textTransform: "none" }}
+          onClick={() => setExpanded((prev) => !prev)}
+        >
+          {expanded ? "Show less" : "Show more"}
+        </Button>
+      )}
+    </CardContent>
+  );
+}
