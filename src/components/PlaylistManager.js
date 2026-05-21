@@ -41,6 +41,7 @@ import Linkify from 'linkify-react';
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { selectToken } from "../features/auth/authSlice";
 import { Navigate, useNavigate } from "react-router-dom";
+import ListIcon from '@mui/icons-material/List';
 
 const isPlaylistChanged = (a = [], b = []) => {
   // console.log("isPlaylistChanged")
@@ -233,7 +234,7 @@ function PlaylistManager({ playlistId }) {
     () => isPlaylistChanged(playlist, originalPlaylist),
     [playlist, originalPlaylist]
   );
-
+  const [showPlaylist, setShowPlaylist] = useState(true);
   return (
     <Box
       sx={{
@@ -248,6 +249,7 @@ function PlaylistManager({ playlistId }) {
           p: 2,
           display: "flex",
           alignItems: "center",
+          gap: 1,
         }}
       >
         {/* Save Playlist| Clone */}
@@ -284,6 +286,24 @@ function PlaylistManager({ playlistId }) {
           </Tooltip>
         )}
 
+        {/* show hide playlist */}
+        {
+          <Tooltip title={showPlaylist ? "Hide Playlist" : "Show Playlist"}>
+            <span>
+              <IconButton
+                color={showPlaylist?"primary":"divider"}
+                onClick={()=>setShowPlaylist(!showPlaylist)}
+                sx={{
+                  border: "1px solid",
+                  borderColor: showPlaylist ? "primary.main" : "divider",
+                }}
+              >
+                <ListIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        }
+
         <PlaylistTitle currentPlaylist={currentPlaylist} />
       </Box>
 
@@ -305,7 +325,7 @@ function PlaylistManager({ playlistId }) {
         }}
       >
         {/* playlist control bar */}
-        <Box
+        {showPlaylist && <Box
           sx={{
             maxWidth: isMobile ? "100%" : "500px",
             minWidth: "300px",
@@ -382,7 +402,7 @@ function PlaylistManager({ playlistId }) {
               </Container>
             </DndProvider>
           </Box>
-        </Box>
+        </Box>}
 
         {/* play area  */}
         <Box

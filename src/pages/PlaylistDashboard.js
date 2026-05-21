@@ -22,6 +22,7 @@ import {
   Collapse,
   CardActionArea,
   CardHeader,
+  CardActions,
 } from "@mui/material";
 import { Add, MoreVert } from "@mui/icons-material";
 
@@ -44,7 +45,7 @@ import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
-// import { Timestamp } from "firebase/firestore";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 export default function PlaylistDashboard() {
   const playlists = useAppSelector(selectAllPlaylists);
@@ -187,14 +188,16 @@ export default function PlaylistDashboard() {
       </Box>
 
       {/* Playlist Cards */}
-      <Stack spacing={2}>
+      <Grid container spacing={2}>
         {filtered.map((p) => (
+          <Grid item xs={12} sm={6} md={4} key={p.id}>
           <Card
             key={p.id}
             sx={{
               position: "relative",
               // cursor: "pointer",
               // "&:hover": { boxShadow: 6 },
+              maxWidth: 420
             }}
           >
             <CardHeader
@@ -203,7 +206,7 @@ export default function PlaylistDashboard() {
                   variant="h6"
                   sx={{
                     cursor: "pointer",
-                    // "&:hover": { textDecoration: "underline" },
+                    "&:hover": { textDecoration: "underline" },
                   }}
                   onClick={() => navigate(`/playlists/${p.id}`)}
                 >
@@ -225,9 +228,9 @@ export default function PlaylistDashboard() {
             />
 
             <NoteCard p={p} navigate={navigate}></NoteCard>
-          </Card>
+          </Card></Grid>
         ))}
-      </Stack>
+      </Grid>
 
       {/* Action Menu */}
       <Menu
@@ -326,13 +329,11 @@ function NoteCard({ p, navigate }) {
   const COLLAPSED_HEIGHT = 60;
   return (
     <CardContent>
-
       {/* ✅ NOTE (NO NAVIGATION) */}
       <Collapse in={expanded} collapsedSize={COLLAPSED_HEIGHT}>
         <Typography
           variant="body2"
           sx={{
-            mt: 1,
             whiteSpace: "pre-line",
             wordBreak: "break-word",
           }}
@@ -343,13 +344,18 @@ function NoteCard({ p, navigate }) {
 
       {/* ✅ SHOW MORE / LESS */}
       {isLong && (
-        <Button
+        <IconButton
           size="small"
           sx={{ mt: 0.5, px: 0, textTransform: "none" }}
           onClick={() => setExpanded((prev) => !prev)}
         >
-          {expanded ? "Show less" : "Show more"}
-        </Button>
+          <ExpandMoreIcon
+            sx={{
+              transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "0.2s",
+            }}
+          />
+        </IconButton>
       )}
     </CardContent>
   );
