@@ -80,5 +80,6 @@ firebase emulators:start --import fd_data --export-on-exit
 ## deploy
 
 ```
+firebase login:add
 firebase deploy --only hosting
 ```

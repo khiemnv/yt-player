@@ -19,14 +19,20 @@ import {
   ListItemText,
   MenuItem,
   Select,
+  Snackbar,
   TextField,
   Typography,
+  Alert,
 } from "@mui/material";
+
+import { getAllTmh, updateTmh, createTmh } from "../services/search/videoApi";
+import { useAppSelector } from "../app/hooks";
+import { selectToken } from "../features/auth/authSlice";
 
 const STORAGE_KEY = "tmh_cycles";
 
 const DEFAULT_CYCLES = Array.from({ length: 16 }, (_, i) => ({
-  id: i + 1,
+  no: i + 1,
   name: `Chu kỳ ${i + 1}`,
   videoUrl: "",
   videoTitle: "",
@@ -136,14 +142,14 @@ Chu kỳ 3
 Tiêu chí để xây dựng lòng tin | Chu kỳ 3 - Chương trình tu mùa hạ 2026`;
 
 parseCycles(raw).forEach((cycle) => {
-  const obj = DEFAULT_CYCLES.find((c) => c.id === cycle.id);
+  const obj = DEFAULT_CYCLES.find((c) => c.no === cycle.no || c.no === cycle.id);
   if (obj) {
     obj.meditationContent = cycle.meditationContent;
   }
 });
 
 parseVideoTitles(rawVideos).forEach((video) => {
-  const obj = DEFAULT_CYCLES.find((c) => c.id === video.id);
+  const obj = DEFAULT_CYCLES.find((c) => c.no === video.no || c.no === video.id);
   if (obj) {
     obj.videoTitle = video.videoTitle;
   }
@@ -210,7 +216,7 @@ function parseCycles(text) {
 
     while ((match = regex.exec(text)) !== null) {
       result.push({
-        id: Number(match[1]),
+        no: Number(match[1]),
         meditationContent: match[2].trim(),
       });
     }
@@ -237,7 +243,7 @@ function parseVideoTitles(text) {
         const title = lines[i + 1] || "";
 
         result.push({
-          id,
+          no: id,
           videoTitle: title,
         });
       }
@@ -249,29 +255,73 @@ export default function MeditationPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
+  const uid = useAppSelector(selectToken);
   const [cycles, setCycles] = useState(DEFAULT_CYCLES);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+
+  const [tmhMap, setTmhMap] = useState({});
 
   const [selectDialogOpen, setSelectDialogOpen] = useState(false);
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const [importText, setImportText] = useState("");
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [previewParsed, setPreviewParsed] = useState([]);
+  const [previewVideos, setPreviewVideos] = useState([]);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    let mounted = true;
 
-    if (saved) {
+    async function loadTmh() {
       try {
-        setCycles(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
+        const { result, error } = await getAllTmh();
+
+        if (error) {
+          console.error(error);
+          setSnackbar({ open: true, message: "Không tải được dữ liệu chu kỳ.", severity: "error" });
+          return;
+        }
+
+        if (mounted && Array.isArray(result) && result.length) {
+          setCycles((prev) => {
+            const updated = prev.map((c) => {
+              const item = result.find((r) => r.no === c.no);
+
+              if (item) {
+                return {
+                  ...c,
+                  name: item.name || c.name,
+                  videoUrl: item.videoUrl || c.videoUrl,
+                  videoTitle: item.videoTitle || c.videoTitle,
+                  meditationContent: item.meditationContent || c.meditationContent,
+                };
+              }
+
+              return c;
+            });
+
+            return updated;
+          });
+
+          const map = {};
+          result.forEach((r) => {
+            if (r.no != null) map[r.no] = r.id;
+          });
+
+          setTmhMap(map);
+        }
+      } catch (error) {
+        console.error(error);
       }
     }
-  }, []);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cycles));
-  }, [cycles]);
+    loadTmh();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!id) {
@@ -282,25 +332,53 @@ export default function MeditationPage() {
   const selectedCycle = useMemo(() => {
     const cycleId = Number(id);
 
-    return cycles.find((item) => item.id === cycleId) || cycles[0];
+    return cycles.find((item) => item.no === cycleId || item.no === cycleId) || cycles[0];
   }, [cycles, id]);
 
   const prayerContent = renderTemplate(PRE_MEDITATION_TEMPLATE, {
-    cycleName: selectedCycle.id,
+    cycleName: selectedCycle.no,
     videoTitle: selectedCycle.videoTitle || "...",
   });
 
-  const updateCycle = (field, value) => {
-    setCycles((prev) =>
-      prev.map((cycle) =>
-        cycle.id === selectedCycle.id
-          ? {
-              ...cycle,
-              [field]: value,
-            }
-          : cycle,
-      ),
-    );
+  const updateCycle = async (field, value) => {
+    const newCycle = { ...selectedCycle, [field]: value };
+
+    setCycles((prev) => prev.map((cycle) => (cycle.no === newCycle.no || cycle.no === newCycle.id ? newCycle : cycle)));
+
+    try {
+      const dbId = tmhMap[newCycle.no] || tmhMap[newCycle.id];
+      const payload = { [field]: value };
+
+      if (dbId) {
+        const { error } = await updateTmh(dbId, payload);
+        if (error) {
+          console.error(error);
+          setSnackbar({ open: true, message: "Lưu dữ liệu thất bại.", severity: "error" });
+          return;
+        }
+      } else {
+        const { result, error } = await createTmh(uid,{
+          no: newCycle.no,
+          name: newCycle.name,
+          videoUrl: newCycle.videoUrl,
+          videoTitle: newCycle.videoTitle,
+          meditationContent: newCycle.meditationContent,
+        });
+
+        if (error) {
+          console.error(error);
+          setSnackbar({ open: true, message: "Lưu dữ liệu thất bại.", severity: "error" });
+          return;
+        }
+
+        if (result && result.id) {
+          setTmhMap((prev) => ({ ...prev, [newCycle.no]: result.id }));
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      setSnackbar({ open: true, message: "Lưu dữ liệu thất bại.", severity: "error" });
+    }
   };
 
   const importCycles = () => {
@@ -308,19 +386,27 @@ export default function MeditationPage() {
 
     const parsed = parseCycles(importText);
 
-    //   console.log("Parsed cycles:", parsed);
-    //   console.log("Parsed videos:", videos);
-
     if (!parsed.length && !videos.length) {
-      alert("Không tìm thấy dữ liệu chu kỳ.");
+      setSnackbar({ open: true, message: "Không tìm thấy dữ liệu chu kỳ.", severity: "error" });
       return;
     }
+
+    setPreviewParsed(parsed);
+    setPreviewVideos(videos);
+    setPreviewDialogOpen(true);
+  };
+
+  const saveImport = async () => {
+    const parsed = previewParsed;
+    const videos = previewVideos;
+
+    if (!parsed.length && !videos.length) return;
 
     setCycles((prev) => {
       const updated = [...prev];
 
       videos.forEach((video) => {
-        const index = updated.findIndex((c) => c.id === video.id);
+        const index = updated.findIndex((c) => c.no === video.no || c.no === video.id);
 
         if (index >= 0) {
           updated[index] = {
@@ -331,7 +417,7 @@ export default function MeditationPage() {
       });
 
       parsed.forEach((item) => {
-        const index = updated.findIndex((c) => c.id === item.id);
+        const index = updated.findIndex((c) => c.no === item.no || c.no === item.id);
 
         if (index >= 0) {
           updated[index] = {
@@ -340,8 +426,8 @@ export default function MeditationPage() {
           };
         } else {
           updated.push({
-            id: item.id,
-            name: `Chu kỳ ${item.id}`,
+            no: item.no || item.id,
+            name: `Chu kỳ ${item.no || item.id}`,
             videoUrl: "",
             meditationContent: item.meditationContent,
           });
@@ -351,10 +437,74 @@ export default function MeditationPage() {
       return updated;
     });
 
+    // persist to API
+    try {
+      for (const video of previewVideos) {
+        const dbId = tmhMap[video.no] || tmhMap[video.id];
+
+        if (dbId) {
+          const { error } = await updateTmh(dbId, { videoTitle: video.videoTitle });
+          if (error) {
+            console.error(error);
+            setSnackbar({ open: true, message: "Lưu dữ liệu import thất bại.", severity: "error" });
+            return;
+          }
+        } else {
+          const { result, error } = await createTmh(uid,{
+            no: video.no || video.id,
+            name: `Chu kỳ ${video.no || video.id}`,
+            videoUrl: "",
+            videoTitle: video.videoTitle,
+            meditationContent: "",
+          });
+
+          if (error) {
+            console.error(error);
+            setSnackbar({ open: true, message: "Lưu dữ liệu import thất bại.", severity: "error" });
+            return;
+          }
+
+          if (result && result.id) setTmhMap((prev) => ({ ...prev, [video.no || video.id]: result.id }));
+        }
+      }
+
+      for (const item of previewParsed) {
+        const dbId = tmhMap[item.no] || tmhMap[item.id];
+
+        if (dbId) {
+          const {error: updateError} = await updateTmh(dbId, { meditationContent: item.meditationContent });
+          if (updateError) {
+            console.error(updateError);
+            setSnackbar({ open: true, message: "Lưu dữ liệu import thất bại.", severity: "error" });
+            return;
+          }
+        } else {
+          const { result, error } = await createTmh(uid, {
+            no: item.no || item.id,
+            name: `Chu kỳ ${item.no || item.id}`,
+            videoUrl: "",
+            videoTitle: "",
+            meditationContent: item.meditationContent,
+          });
+          if (error) {
+            console.error(error);
+            setSnackbar({ open: true, message: "Lưu dữ liệu import thất bại.", severity: "error" });
+            return;
+          }
+          if (result && result.id) setTmhMap((prev) => ({ ...prev, [item.no || item.id]: result.id }));
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      setSnackbar({ open: true, message: "Lưu dữ liệu import thất bại.", severity: "error" });
+      return;
+    }
+
+    setPreviewDialogOpen(false);
     setImportDialogOpen(false);
     setImportText("");
 
-    alert(`Đã cập nhật ${parsed.length + videos.length} chu kỳ`);
+    setSnackbar({ open: true, message: `Đã cập nhật ${previewParsed.length + previewVideos.length} chu kỳ`, severity: "success" });
   };
 
   return (
@@ -372,11 +522,11 @@ export default function MeditationPage() {
           <List>
             {cycles.map((cycle) => (
               <ListItemButton
-                key={cycle.id}
+                key={cycle.no}
                 onClick={() => {
                   setSelectDialogOpen(false);
 
-                  navigate(`/tmh/${cycle.id}`);
+                  navigate(`/tmh/${cycle.no}`);
                 }}
               >
                 <ListItemText primary={cycle.name} />
@@ -385,6 +535,65 @@ export default function MeditationPage() {
           </List>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={previewDialogOpen}
+        onClose={() => setPreviewDialogOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>Xem trước dữ liệu nhập</DialogTitle>
+
+        <DialogContent>
+          <Typography variant="subtitle1">Video được phát hiện ({previewVideos.length})</Typography>
+
+          <List>
+            {previewVideos.map((v) => (
+                <ListItemButton key={v.no || v.id}>
+                  <ListItemText primary={`Chu kỳ ${v.no || v.id}: ${v.videoTitle}`} />
+                </ListItemButton>
+              ))}
+          </List>
+
+          <Typography variant="subtitle1" sx={{ mt: 2 }}>
+            Nội dung thiền quán được phát hiện ({previewParsed.length})
+          </Typography>
+
+          <List>
+            {previewParsed.map((p) => (
+              <ListItemButton key={p.no || p.id}>
+                <ListItemText
+                  primary={`Chu kỳ ${p.no || p.id}`}
+                  secondary={p.meditationContent?.slice(0, 300)}
+                />
+              </ListItemButton>
+            ))}
+          </List>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setPreviewDialogOpen(false)}>Hủy</Button>
+
+          <Button variant="contained" onClick={saveImport}>
+            Lưu
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
 
       <Dialog
         open={importDialogOpen}
@@ -435,7 +644,49 @@ export default function MeditationPage() {
           variant="outlined"
           onClick={() => {
             setCycles(DEFAULT_CYCLES);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_CYCLES));
+
+            (async () => {
+              try {
+                for (const c of DEFAULT_CYCLES) {
+                  const dbId = tmhMap[c.no] || tmhMap[c.id];
+
+                  if (dbId) {
+                    const { error } = await updateTmh(dbId, {
+                      videoUrl: c.videoUrl,
+                      videoTitle: c.videoTitle,
+                      meditationContent: c.meditationContent,
+                      name: c.name,
+                      no: c.no,
+                    });
+                    if (error) {
+                      console.error(error);
+                      setSnackbar({ open: true, message: "Lưu dữ liệu thất bại.", severity: "error" });
+                      return;
+                    }
+                  } else {
+                    const { result, error } = await createTmh(uid, {
+                      no: c.no,
+                      name: c.name,
+                      videoUrl: c.videoUrl,
+                      videoTitle: c.videoTitle,
+                      meditationContent: c.meditationContent,
+                    });
+
+                    if (error) {
+                      console.error(error);
+                      setSnackbar({ open: true, message: "Lưu dữ liệu thất bại.", severity: "error" });
+                      return;
+                    }
+
+                    if (result && result.id) {
+                      setTmhMap((prev) => ({ ...prev, [c.no || c.id]: result.id }));
+                    }
+                  }
+                }
+              } catch (e) {
+                console.error(e);
+              }
+            })();
           }}
         >
           Reset
@@ -446,12 +697,12 @@ export default function MeditationPage() {
         <InputLabel>Chọn chu kỳ</InputLabel>
 
         <Select
-          value={selectedCycle.id}
+          value={selectedCycle.no}
           label="Chọn chu kỳ"
           onChange={(e) => navigate(`/tmh/${e.target.value}`)}
         >
           {cycles.map((cycle) => (
-            <MenuItem key={cycle.id} value={cycle.id}>
+            <MenuItem key={cycle.no} value={cycle.no}>
               {cycle.name}
             </MenuItem>
           ))}
