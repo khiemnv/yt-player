@@ -357,6 +357,55 @@ export default function MeditationPage() {
     alert(`Đã cập nhật ${parsed.length + videos.length} chu kỳ`);
   };
 
+
+  const isValidUrl = (value) => {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const handleVideoPaste = (
+  e
+) => {
+  const html = e.clipboardData.getData("text/html");
+  const text = e.clipboardData.getData("text/plain").trim();
+
+  // Case 1: Hyperlink (title + url)
+  if (html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const anchor = doc.querySelector("a[href]");
+
+    if (anchor) {
+      e.preventDefault();
+
+      updateCycle("videoUrl", anchor.href);
+
+      // nếu muốn lưu title riêng
+      updateCycle(
+        "videoTitle",
+        anchor.textContent?.trim() || anchor.href
+      );
+
+      return;
+    }
+  }
+
+  // Case 2: URL thuần
+  if (isValidUrl(text)) {
+    e.preventDefault();
+    updateCycle("videoUrl", text);
+    return;
+  }
+
+  // Case 3: Text thường
+  // cho TextField xử lý mặc định hoặc:
+  e.preventDefault();
+  updateCycle("videoTitle", text);
+};
+
   return (
     <Box
       sx={{
@@ -483,15 +532,39 @@ export default function MeditationPage() {
             Link Video
           </Typography>
 
+          {/* Title input:
+              - Hiển thị nếu chưa có title
+              - Hoặc nếu đã có url (để nhập nốt title)
+              => đảm bảo trường hợp chỉ có url hoặc chỉ có title đều có chỗ nhập tiếp
+          */}
+          {(selectedCycle?.videoUrl) && (
+            <TextField
+              sx={{ mb: 2 }}
+              label="Tiêu đề video"
+              fullWidth
+              value={selectedCycle?.videoTitle || ""}
+              onChange={(e) => updateCycle("videoTitle", e.target.value)}
+            />
+          )}
+
+          {/* URL input: luôn hiển thị */}
           <TextField
+            label="Video URL"
             fullWidth
-            value={selectedCycle.videoUrl}
+            value={selectedCycle?.videoUrl || ""}
             onChange={(e) => updateCycle("videoUrl", e.target.value)}
+            onPaste={handleVideoPaste}
           />
 
-          {selectedCycle.videoUrl && (
-            <Box mt={2}>
-              <Link href={selectedCycle.videoUrl} target="_blank">
+          {/* Link mở video: chỉ hiển thị khi có URL */}
+          {selectedCycle?.videoUrl && (
+            <Box mt={1}>
+              <Link
+                href={selectedCycle.videoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                underline="hover"
+              >
                 Mở video
               </Link>
             </Box>
