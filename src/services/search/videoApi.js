@@ -155,3 +155,24 @@ export const updateTag = (id, changes, token) => tagApi.update(id, changes);
 export const saveTag = (tag, token) => tagApi.save(tag);  
 export const removeTag = (id, token) => tagApi.remove(id);
 export const saveOrCreateTag = (tag, token) => tagApi.saveOrCreate(tag);
+
+class TmhApi extends BaseApi {
+  constructor() {
+    const defaultEntity = { no: 0, name: "", videoUrl: "", createdAtMs: 0, videoTitle: "", meditationContent: "", owner: "" };
+    super("tmh", defaultEntity);
+  }
+  create(uid, tmh) {
+    const newTmh = {
+      ...tmh,
+      owner: uid,
+      createdAtMs: Date.now(),
+    };
+    return super.create(newTmh);
+  }
+}
+var tmhApi = new TmhApi();
+export const getAllTmh = () => tmhApi.getAll();
+export const getTmh = (id) => tmhApi.getOne(id);
+export const createTmh = (uid, tmh) => tmhApi.create(uid, tmh);
+export const updateTmh = (id, changes, token) => tmhApi.update(id, changes);
+export const removeTmh = (id, token) => tmhApi.remove(id);
