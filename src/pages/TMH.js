@@ -340,22 +340,22 @@ export default function MeditationPage() {
     videoTitle: selectedCycle.videoTitle || "...",
   });
 
-  const updateCycle = async (field, value) => {
-    const newCycle = { ...selectedCycle, [field]: value };
-
-    setCycles((prev) => prev.map((cycle) => (cycle.no === newCycle.no || cycle.no === newCycle.id ? newCycle : cycle)));
+  const updateCycle = async (payload) => {
+    const newCycle = { ...selectedCycle, ...payload };
 
     try {
       const dbId = tmhMap[newCycle.no] || tmhMap[newCycle.id];
-      const payload = { [field]: value };
+      const updatePayload = { ...payload };
 
       if (dbId) {
-        const { error } = await updateTmh(dbId, payload);
+        const { error } = await updateTmh(dbId, updatePayload);
         if (error) {
           console.error(error);
           setSnackbar({ open: true, message: "Lưu dữ liệu thất bại.", severity: "error" });
           return;
         }
+        
+        setCycles((prev) => prev.map((cycle) => (cycle.no === newCycle.no || cycle.no === newCycle.id ? newCycle : cycle)));
       } else {
         const { result, error } = await createTmh(uid,{
           no: newCycle.no,
@@ -374,6 +374,8 @@ export default function MeditationPage() {
         if (result && result.id) {
           setTmhMap((prev) => ({ ...prev, [newCycle.no]: result.id }));
         }
+        
+        setCycles((prev) => prev.map((cycle) => (cycle.no === newCycle.no || cycle.no === newCycle.id ? newCycle : cycle)));
       }
     } catch (e) {
       console.error(e);
@@ -507,54 +509,52 @@ export default function MeditationPage() {
     setSnackbar({ open: true, message: `Đã cập nhật ${previewParsed.length + previewVideos.length} chu kỳ`, severity: "success" });
   };
 
-
   const isValidUrl = (value) => {
-  try {
-    new URL(value);
-    return true;
-  } catch {
-    return false;
-  }
-};
+    try {
+      new URL(value);
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
-const handleVideoPaste = (
-  e
-) => {
-  const html = e.clipboardData.getData("text/html");
-  const text = e.clipboardData.getData("text/plain").trim();
+  const handleVideoPaste = async (
+    e
+  ) => {
+    const html = e.clipboardData.getData("text/html");
+    const text = e.clipboardData.getData("text/plain").trim();
 
-  // Case 1: Hyperlink (title + url)
-  if (html) {
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const anchor = doc.querySelector("a[href]");
+    // Case 1: Hyperlink (title + url)
+    if (html) {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const anchor = doc.querySelector("a[href]");
 
-    if (anchor) {
+      if (anchor) {
+        e.preventDefault();
+
+        await updateCycle({
+          videoUrl: anchor.href,
+          videoTitle: anchor.textContent?.trim() || anchor.href,
+        });
+
+        return;
+      }
+    }
+
+    // Case 2: URL thuần
+    if (isValidUrl(text)) {
       e.preventDefault();
-
-      updateCycle("videoUrl", anchor.href);
-
-      // nếu muốn lưu title riêng
-      updateCycle(
-        "videoTitle",
-        anchor.textContent?.trim() || anchor.href
-      );
-
+      await updateCycle({"videoUrl": text});
       return;
     }
-  }
 
-  // Case 2: URL thuần
-  if (isValidUrl(text)) {
+    // Case 3: Text thường
+    // cho TextField xử lý mặc định hoặc:
     e.preventDefault();
-    updateCycle("videoUrl", text);
-    return;
-  }
+    await updateCycle({"videoTitle": text});
+  };
 
-  // Case 3: Text thường
-  // cho TextField xử lý mặc định hoặc:
-  e.preventDefault();
-  updateCycle("videoTitle", text);
-};
+  console.log("selectedCycle", selectedCycle);
 
   return (
     <Box
@@ -794,7 +794,7 @@ const handleVideoPaste = (
               label="Tiêu đề video"
               fullWidth
               value={selectedCycle?.videoTitle || ""}
-              onChange={(e) => updateCycle("videoTitle", e.target.value)}
+              onChange={(e) => updateCycle({"videoTitle": e.target.value})}
             />
           )}
 
@@ -803,7 +803,7 @@ const handleVideoPaste = (
             label="Video URL"
             fullWidth
             value={selectedCycle?.videoUrl || ""}
-            onChange={(e) => updateCycle("videoUrl", e.target.value)}
+            onChange={(e) => updateCycle({"videoUrl": e.target.value})}
             onPaste={handleVideoPaste}
           />
 
@@ -834,7 +834,7 @@ const handleVideoPaste = (
             multiline
             minRows={20}
             value={selectedCycle.meditationContent}
-            onChange={(e) => updateCycle("meditationContent", e.target.value)}
+            onChange={(e) => updateCycle({"meditationContent": e.target.value})}
           />
         </CardContent>
       </Card>
