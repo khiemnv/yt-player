@@ -20,10 +20,11 @@ import {
   Typography,
 } from "@mui/material";
 import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch } from "../app/hooks";
 import { logout, selectRoleObj, selectUsername } from "../features/auth/authSlice";
 import SearchIcon from "@mui/icons-material/Search";
+import ClearIcon from "@mui/icons-material/Clear";
 import MenuIcon from "@mui/icons-material/Menu";
 import HomeIcon from "@mui/icons-material/Home";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -33,51 +34,74 @@ import { PlayVideoBox } from "./PlaylistManager";
 
 const pages = [
   { text: "Home", icon: <HomeIcon />, url: "/", roles: ["admin", "user", "guest"] },
+  { text: "LHL", url: "/lhl", roles: ["admin", "user", "guest"] },
   { text: "User Manger", icon: <PeopleIcon />, url: "/usermanager", roles: ["admin"] },
-  { text: "Settings", icon: <SettingsIcon />, url: "/setting",roles: ["admin", "user", "guest"] },
+  // { text: "Settings", icon: <SettingsIcon />, url: "/setting",roles: ["admin", "user", "guest"] },
 ];
 
+function getPageTitle(pathname) {
+  if (pathname === "/") return "My Playlists";
+  if (pathname === "/lhl") return "LHL";
+  if (pathname === "/tmh" || pathname.startsWith("/tmh/")) {
+    return "Tu Mùa Hạ";
+  }
+  if (pathname.startsWith("/playlists/")) return "Playlist";
+  return "YouTube Player";
+}
 
 function ChatInput({ onChange }) {
   const [message, setMessage] = useState("");
 
   const handleSend = () => {
-    if (!message.trim()) return;
-    onChange(message.trim());
+    const value = message.trim();
+    if (!value) return;
+    onChange(value);
     setMessage("");
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleSend();
-    }
   };
 
   return (
     <Paper
-      elevation={3}
+      elevation={0}
       sx={{
         p: 0.5,
         px: 2,
         borderRadius: 4,
+        border: 1,
+        borderColor: "gray",
         display: "flex",
         alignItems: "center",
+        backgroundColor: "transparent",
+        boxShadow: "none",
       }}
     >
       <TextField
         fullWidth
+        size="small"
         placeholder="Paste YouTube URL…"
         variant="standard"
         value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        onKeyDown={handleKeyDown}
+        onChange={(event) => setMessage(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            handleSend();
+          }
+        }}
         slotProps={{
           input: {
             disableUnderline: true,
             endAdornment: (
               <InputAdornment position="end">
+                {message && (
+                  <IconButton
+                    aria-label="Clear search content"
+                    onClick={() => setMessage("")}
+                  >
+                    <ClearIcon />
+                  </IconButton>
+                )}
                 <IconButton
+                  aria-label="Search"
                   color="primary"
                   onClick={handleSend}
                   disabled={!message.trim()}
@@ -95,10 +119,10 @@ function ChatInput({ onChange }) {
 
 
 export function ResponsiveAppBar() {
-  
   const playerRef = useRef(null);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const [anchorElNav, setAnchorElNav] = useState(null);
   const [anchorElUser, setAnchorElUser] = useState(null);
 
@@ -108,6 +132,9 @@ export function ResponsiveAppBar() {
   const availablePages = pages.filter((item) =>
     item.roles.includes(userRole)
   );
+  const pageTitle = getPageTitle(location.pathname);
+  const isPlaylistPage =
+    location.pathname === "/" || location.pathname.startsWith("/playlists/");
   const settings = ['Logout'];
 
   const handleOpenNavMenu = (event) => {
@@ -158,19 +185,17 @@ export function ResponsiveAppBar() {
           </Typography>;
   const iconm = <Box  component="img" src="/logo192.png" sx={{ display: { xs: 'flex', md: 'none' }, mr: 1, height: 32, width: 32 }} />;
   const icons = <Box  component="img" src="/logo192.png" sx={{ display: { xs: 'none', md: 'flex' }, mr: 1, height: 32, width: 32 }} />;
-  
-  const [search, setSearch] = useState("");
   const [playingVideo, setPlayingVideo] = useState(null);
-  const handleSearch = value => {
-    console.log(value)
-    setSearch(value)
+  const handleSearch = (value) => {
     setPlayingVideo({
       id: crypto.randomUUID(),
       videourl: value,
-      startTime:0, 
-      endTime:0 })
-  }
-  const handleClose=()=>{setPlayingVideo()}
+      startTime: 0,
+      endTime: 0,
+    });
+  };
+  const handleClose = () => setPlayingVideo(null);
+
   return (
     <AppBar position="static">
       <Container maxWidth="xl">
@@ -236,17 +261,18 @@ export function ResponsiveAppBar() {
             ))}
           </Box>
 
-          {/* input video */}
-          <Box sx={{ m: 1, flexGrow: {xs:1, md: 0} }}>
-            <Box sx={{ margin: "auto", maxWidth: "300px" }}>
-              <ChatInput
-                size="small"
-                placeholder="Search..."
-                value={search}
-                onChange={handleSearch}
-              />
+          {isPlaylistPage ? (
+            <Box sx={{ m: 1, flexGrow: { xs: 1, md: 0 }, maxWidth: "100%" }}>
+              <ChatInput onChange={handleSearch} />
             </Box>
-          </Box>
+          ) : (
+            <Box sx={{ m: 1, flexGrow: { xs: 1, md: 0 }, maxWidth: "100%", minWidth: 0, display: { md: "none" } } }>
+              <Typography variant="h6" noWrap sx={{ textAlign: "center" }}>
+                {pageTitle}
+              </Typography>
+            </Box>
+          )}
+          
           {/* User Avatar and Menu */}
           <Box sx={{ flexGrow: 0, ml: 1 }}>
             <Tooltip title={user}>
@@ -288,9 +314,8 @@ export function ResponsiveAppBar() {
         </Toolbar>
       </Container>
 
-      {/* play video modal */}
       <Modal
-        open={playingVideo}
+        open={Boolean(playingVideo)}
         onClose={handleClose}
         fullWidth
         maxWidth="sm"

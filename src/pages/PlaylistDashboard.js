@@ -151,9 +151,22 @@ export default function PlaylistDashboard() {
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1200, mx: "auto" }}>
       {/* Header */}
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mb: 3 }}>
-        <Typography variant="h5" sx={{ flexGrow: 1 }}>
-          {"🎵 My Playlists"}
-        </Typography>
+        <Stack direction={"row"} spacing={2} alignContent={"center"}>
+          <Typography variant="h5" sx={{ flexGrow: 1 }}>
+            {"🎵 My Playlists"}
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => {
+              setForm({ title: "", dateCreated: Date.now(), note: "" });
+              setEditing(null);
+              setOpen(true);
+            }}
+          >
+            Add
+          </Button>
+        </Stack>
 
         <TextField
           size="small"
@@ -174,17 +187,6 @@ export default function PlaylistDashboard() {
           </Select>
         </FormControl>
 
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => {
-            setForm({ title: "", dateCreated: Date.now(), note: "" });
-            setEditing(null);
-            setOpen(true);
-          }}
-        >
-          Add
-        </Button>
       </Box>
 
       {/* Playlist Cards */}

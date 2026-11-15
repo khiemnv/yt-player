@@ -10,6 +10,7 @@ import PlaylistDashboard from "./pages/PlaylistDashboard";
 import { ResponsiveAppBar } from "./components/ResponsiveAppBar";
 import PlaylistDetail from "./pages/PlaylistDetail";
 import MeditationPage from "./pages/TMH";
+import LHL from "./pages/LHL";
 
 export function useMobileVh() {
   useEffect(() => {
@@ -89,6 +90,7 @@ function App() {
             <Route path="/playlists/:id" element={<PlaylistDetail />} />
             <Route path="/tmh" element={<MeditationPage />} />
             <Route path="/tmh/:id" element={<MeditationPage />} />
+            <Route path="/lhl" element={<LHL />} />
           </Routes>
         </main>
         {/* <Footer /> */}

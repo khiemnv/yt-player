@@ -1,5 +1,12 @@
 import { diff_match_patch } from "diff-match-patch";
 
+export function handleApiError(operation, error) {
+  console.error(`[API] ${operation} failed:`, error);
+  return {
+    error: error instanceof Error ? error.message : String(error),
+  };
+}
+
 export function createEntity(doc, entity = {}) {
   return {
     id: doc.id,

@@ -13,7 +13,11 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../../firebase/firebase";
-import { calcPath as calcPatch, snapshotToArray } from "../../utils/fbUtil";
+import {
+  calcPath as calcPatch,
+  handleApiError,
+  snapshotToArray,
+} from "../../utils/fbUtil";
 import latinize from "latinize";
 import { patch } from "@mui/material";
 
@@ -59,7 +63,7 @@ export class BaseApi {
 
       return { result: {id} };
     } catch (ex) {
-      return { error: ex.message };
+      return handleApiError(`${this.collectionName}.remove`, ex);
     }
   }
 
@@ -100,7 +104,7 @@ export class BaseApi {
       await Promise.all(commitBatchPromises);
       return { result: deletedIds };
     } catch (ex) {
-      return { error: ex.message };
+      return handleApiError(`${this.collectionName}.removeAll`, ex);
     }
   }
 
@@ -131,12 +135,12 @@ export class BaseApi {
         });
         console.log("logDocRef:", logDocRef.id);
       } catch (error) {
-        console.log(error.message);
+        console.error(`[API] ${this.collectionName}_log.add failed:`, error);
       }
 
       return { result: {id} };
     } catch (ex) {
-      return { error: ex.message };
+      return handleApiError(`${this.collectionName}.update`, ex);
     }
   }
 
@@ -170,12 +174,12 @@ export class BaseApi {
         });
         console.log("logDocRef:", logDocRef.id);
       } catch (error) {
-        console.log(error.message);
+        console.error(`[API] ${this.collectionName}_log.add failed:`, error);
       }
 
       return { result: {id} };
     } catch (ex) {
-      return { error: ex.message };
+      return handleApiError(`${this.collectionName}.update`, ex);
     }
   }
 
@@ -188,7 +192,7 @@ export class BaseApi {
 
       return { result };
     } catch (ex) {
-      return { error: ex.message };
+      return handleApiError(`${this.collectionName}.getLog`, ex);
     }
   }
   async updateLog(logId, changes) {
@@ -197,7 +201,7 @@ export class BaseApi {
     await updateDoc(ref, changes);
     return { result: true };
   } catch (ex) {
-    return { error: ex.message };
+    return handleApiError(`${this.collectionName}.updateLog`, ex);
   }
 }
   /**
@@ -231,8 +235,7 @@ export class BaseApi {
 
       return { result: body };
     } catch (ex) {
-      console.log(ex.message);
-      return { error: ex.message };
+      return handleApiError(`${this.collectionName}.saveOrCreate`, ex);
     }
   }
 
@@ -300,13 +303,12 @@ export class BaseApi {
         });
         console.log("logDocRef:", logDocRef.id);
       } catch (error) {
-        console.log(error.message);
+        console.error(`[API] ${this.collectionName}_log.add failed:`, error);
       }
 
       return { result: body };
     } catch (ex) {
-      console.log(ex.message);
-      return { error: ex.message };
+      return handleApiError(`${this.collectionName}.create`, ex);
     }
   }
 
@@ -323,7 +325,7 @@ export class BaseApi {
 
       return { result };
     } catch (ex) {
-      return { error: ex.message };
+      return handleApiError(`${this.collectionName}.query`, ex);
     }
   }
   
@@ -335,7 +337,7 @@ export class BaseApi {
       // result.forEach((u) => this.map.set(u.id, cloneObj(u)));
       return { result };
     } catch (ex) {
-      return { error: ex.message };
+      return handleApiError(`${this.collectionName}.query`, ex);
     }
   }
 
@@ -350,19 +352,23 @@ export class BaseApi {
 
       return { result };
     } catch (ex) {
-      return { error: ex.message };
+      return handleApiError(`${this.collectionName}.getAll`, ex);
     }
   }
 
   async getOne(id) {
-    const ref = doc(db, this.collectionName, id);
-    const docSnap = await getDoc(ref);
-    if (docSnap.exists()) {
-      var obj = { ...docSnap.data(), id: docSnap.id };
-      // this.map.set(obj.id, cloneObj(obj));
-      return { result: obj };
-    } else {
-      return { error: "not found" };
+    try {
+      const ref = doc(db, this.collectionName, id);
+      const docSnap = await getDoc(ref);
+      if (docSnap.exists()) {
+        var obj = { ...docSnap.data(), id: docSnap.id };
+        // this.map.set(obj.id, cloneObj(obj));
+        return { result: obj };
+      } else {
+        return { error: "not found" };
+      }
+    } catch (ex) {
+      return handleApiError(`${this.collectionName}.getOne`, ex);
     }
   }
 }
@@ -438,7 +444,7 @@ class UserApi extends BaseApi {
 
       return { result: { account, users } };
     } catch (ex) {
-      return { error: ex.message };
+      return handleApiError(`${this.collectionName}.genAccount`, ex);
     }
   }
 }

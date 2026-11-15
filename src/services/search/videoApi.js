@@ -16,6 +16,7 @@ import {
   limit,
 } from "firebase/firestore";
 import { db } from "../../firebase/firebase";
+import { handleApiError } from "../../utils/fbUtil";
 import { BaseApi, cloneObj } from "../user/userApi";
 /**
  * CURD
@@ -36,85 +37,105 @@ class PlaylistApi extends BaseApi {
   pageSize = 100,
   lastDoc = null,
   tag = null,) {
-    const q = lastDoc
-      ? query(
-        collection(db, collectionName),
-        where("tags", "array-contains", tag),
-        orderBy("titleId", "desc"),
-        startAfter(lastDoc),
-        limit(pageSize)
-      )
-      : query(
-        collection(db, collectionName),
-        where("tags", "array-contains", tag),
-        orderBy("titleId", "desc"),
-        limit(pageSize)
-      );
+    try {
+      const q = lastDoc
+        ? query(
+            collection(db, collectionName),
+            where("tags", "array-contains", tag),
+            orderBy("titleId", "desc"),
+            startAfter(lastDoc),
+            limit(pageSize)
+          )
+        : query(
+            collection(db, collectionName),
+            where("tags", "array-contains", tag),
+            orderBy("titleId", "desc"),
+            limit(pageSize)
+          );
 
-    const snapshot = await getDocs(q);
-    const records = snapshot.docs.map(d => ({
-      id: d.id,
-      ...d.data(),
-    }));
+      const snapshot = await getDocs(q);
+      const records = snapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+      }));
 
-    // records.forEach((u) => this.map.set(u.id, cloneObj(u)));
+      // records.forEach((u) => this.map.set(u.id, cloneObj(u)));
 
-    const nextCursor =
-      snapshot.docs.length > 0
-        ? snapshot.docs[snapshot.docs.length - 1]
-        : null;
+      const nextCursor =
+        snapshot.docs.length > 0
+          ? snapshot.docs[snapshot.docs.length - 1]
+          : null;
 
-    var result = {
-      records,
-      nextCursor,
-      hasMore: snapshot.size === pageSize,
-    };
-    return { result };
+      var result = {
+        records,
+        nextCursor,
+        hasMore: snapshot.size === pageSize,
+      };
+      return { result };
+    } catch (error) {
+      return handleApiError(`${collectionName}.fetchNextPage`, error);
+    }
   }
 
   async getAll(uid) {
-    const q = query(
-      collection(db, "playlists"),
-      where("owner", "==", uid),
-      // orderBy("dateCreated", "desc")
-    );
-    const snapshot = await getDocs(q);
-    const playlists = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-      dateCreated: doc.data().dateCreated?.toDate().toISOString(),
-    }));
-    return {result: playlists}; 
+    try {
+      const q = query(
+        collection(db, "playlists"),
+        where("owner", "==", uid),
+        // orderBy("dateCreated", "desc")
+      );
+      const snapshot = await getDocs(q);
+      const playlists = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        dateCreated: doc.data().dateCreated?.toDate().toISOString(),
+      }));
+      return {result: playlists};
+    } catch (error) {
+      return handleApiError("playlists.getAll", error);
+    }
   }
 
   async getPlaylistById(id) {
-    const {result, error} = await this.getOne(id);
-    if (result) {
-      result.dateCreated = result.dateCreated.toDate().toISOString();
+    try {
+      const {result, error} = await this.getOne(id);
+      if (result) {
+        result.dateCreated = result.dateCreated.toDate().toISOString();
+      }
+      return {result, error};
+    } catch (apiError) {
+      return handleApiError("playlists.getById", apiError);
     }
-    return {result, error};
   }
   
   async createPlaylist(uid, playlist) {
-    const newPlaylist = {
-      ...playlist,
-      owner: uid,
-      dateCreated: Timestamp.fromDate(new Date(playlist.dateCreated)),
-    };
-    const {result, error} = await this.create(newPlaylist);
-    if (result) {
-      result.dateCreated = result.dateCreated.toDate().toISOString();
+    try {
+      const newPlaylist = {
+        ...playlist,
+        owner: uid,
+        dateCreated: Timestamp.fromDate(new Date(playlist.dateCreated)),
+      };
+      const {result, error} = await this.create(newPlaylist);
+      if (result) {
+        result.dateCreated = result.dateCreated.toDate().toISOString();
+      }
+      return {result, error};
+    } catch (error) {
+      return handleApiError("playlists.create", error);
     }
-    return {result, error};
   }
 
   async updatePlaylist(id, changes) {
-    const updatedFields = { ...changes }; 
-    if (changes.dateCreated) {
-      updatedFields.dateCreated = Timestamp.fromDate(new Date(changes.dateCreated));
+    try {
+      const updatedFields = { ...changes };
+      if (changes.dateCreated) {
+        updatedFields.dateCreated = Timestamp.fromDate(new Date(changes.dateCreated));
+      }
+      const {result, error} = await this.update(id, updatedFields);
+      return {result, error};
+    } catch (error) {
+      return handleApiError("playlists.update", error);
     }
-    const {result, error} = await this.update(id, updatedFields);
-    return {result, error};
   }
 }
 var playlistApi = new PlaylistApi();
